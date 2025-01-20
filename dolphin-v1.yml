@@ -265,6 +265,8 @@ dependencies:
   - zstd=1.5.6=ha6fb4c9_0
   - pip:
       - click==8.1.8
+      - lap==0.5.12
       - motmetrics==1.4.0
+      - shapely==2.0.6
       - xmltodict==0.14.2
 prefix: /nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v1
