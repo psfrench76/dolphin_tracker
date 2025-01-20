@@ -1,4 +1,5 @@
 from ultralytics import YOLO
+import motmetrics as mm
 import os
 import pandas as pd
 import numpy as np
@@ -22,22 +23,20 @@ def run_tracking_and_evaluation(dataset, model, output):
     os.makedirs(output, exist_ok=True)
 
     # Construct output filenames
-    gt_file = os.path.join(output, f'{model_name}_gt_formatted.txt')
-    tracker_results_file = os.path.join(output, f'{model_name}_tracker_results.txt')
-    evaluation_file = os.path.join(output, f'{model_name}_mota_evaluation.csv')
+    gt_file_path = os.path.join(output, f'{model_name}_gt_formatted.txt')
+    results_file_path = os.path.join(output, f'{model_name}_results.txt')
+    metrics_file_path = os.path.join(output, f'{model_name}_mot_evaluation.csv')
 
     # Run tracking
     results = model_instance.track(source=images_directory, tracker="bytetrack.yaml", stream=True)
 
-    save_tracker_results(tracker_results_file, results)
-    process_ground_truth(gt_file, label_directory)
-    assign_group_ids_in_file(gt_file)
-    
-    gt_data = read_data(gt_file)
-    tracker_data = read_data(tracker_results_file)
+    save_tracker_results(results_file_path, results)
+    save_ground_truth(gt_file_path, label_directory)
 
-    assign_unique_ids_per_frame(gt_data)
-    compute_metrics(gt_data, tracker_data, evaluation_file, gt_file, tracker_results_file)
+    df_gt = mm.io.loadtxt(gt_file_path)
+    df_pred = mm.io.loadtxt(results_file_path)
+
+    compute_metrics(metrics_file_path, df_gt, df_pred)
 
 
 def save_tracker_results(file_path, results):
@@ -52,58 +51,36 @@ def save_tracker_results(file_path, results):
                         f'{frame_id + 1},{track_id},{bbox[0]},{bbox[1]},{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},-1,-1,{conf}\n')
 
 
-def read_data(file_path):
-    df = pd.read_csv(file_path, header=None)
-    df = df.iloc[:, :6]
-    df.columns = ['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max']
-    df['bbox'] = df.apply(
-        lambda row: (row['x_min'], row['y_min'], row['x_max'] - row['x_min'], row['y_max'] - row['y_min']), axis=1)
-    return df[['frame', 'id', 'bbox']]
-
-
-# Function to assign new IDs to zero entries while preserving existing non-zero IDs
-def assign_unique_ids_per_frame(gt_data):
-    # Group the data by 'frame'
-    grouped = gt_data.groupby('frame')
-
-    # Iterate over each group
-    for frame, group in grouped:
-        next_id = 1
-        for index, row in group.iterrows():
-            if row['id'] == 0:
-                # Assign a new unique ID within the frame
-                gt_data.at[index, 'id'] = next_id
-                next_id += 1
-            else:
-                # Update `next_id` to ensure uniqueness within the frame
-                next_id = max(next_id, row['id'] + 1)
-
-
-def assign_group_ids_in_file(file_path):
-    df = pd.read_csv(file_path, header=None)
-    df = df.iloc[:, :6]
-    df.columns = ['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max']
-    assign_unique_ids_per_frame(df)
-    df['mot15col1'] = -1
-    df['mot15col2'] = -1
-    df['mot15col3'] = 1
-    df.to_csv(file_path, index=False, header=False)
-
-
-def process_ground_truth(gt_file_path, label_directory):
-
-    # Combine label files
+def save_ground_truth(gt_file_path, label_directory):
     files = [f for f in os.listdir(label_directory) if f.endswith('.txt')]
     files.sort()
 
-    with open(gt_file_path, 'w') as outfile:
-        for i, filename in enumerate(files, start=1):
-            filepath = os.path.join(label_directory, filename)
-            with open(filepath, 'r') as infile:
-                content = infile.read()
-                content = [f"{i}," + ",".join(x.split(" ")) for x in content.split("\n") if x.strip()]
-                content = "\n".join(content)
-                outfile.write(f"{content}\n")
+    data = []
+
+    # Read and process each file
+    for i, filename in enumerate(files, start=1):
+        filepath = os.path.join(label_directory, filename)
+        with open(filepath, 'r') as infile:
+            content = infile.read()
+            next_id = 1
+            for line in content.split("\n"):
+                if line.strip():
+                    # Add frame number as the first element
+                    line_data = line.split(" ")
+                    # Replace any box IDs of 0
+                    if line_data[0] == '0':
+                        line_data[0] = str(next_id)
+                        next_id += 1
+                    data.append([i] + line_data)
+
+    # Convert list to DataFrame
+    gt_data = pd.DataFrame(data, columns=['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max'])
+    gt_data = gt_data.astype({'frame': int, 'id': int, 'x_min': float, 'y_min': float, 'x_max': float, 'y_max': float})
+
+    gt_data['mot15col1'] = -1
+    gt_data['mot15col2'] = -1
+    gt_data['mot15col3'] = 1
+    gt_data.to_csv(gt_file_path, index=False, header=False)
 
 
 def calculate_iou_shapely(box_1, box2):
@@ -115,18 +92,21 @@ def calculate_iou_shapely(box_1, box2):
     return intersection / union if union != 0 else 0
 
 
-def compute_metrics(gt_data, tracker_data, evaluation_file, gt_file, tracker_results_file):
+def compute_metrics(evaluation_file, df_gt, df_pred):
     tm = TrackingMetrics()
-    frames = sorted(set(gt_data['frame'].unique()).union(set(tracker_data['frame'].unique())))
+
+    frames = sorted(set(df_gt.index.get_level_values('FrameId')).union(
+        set(df_pred.index.get_level_values('FrameId'))))
 
     for frame in frames:
-        g = gt_data[gt_data['frame'] == frame]
-        t = tracker_data[tracker_data['frame'] == frame]
+        g = df_gt.loc[frame]
+        t = df_pred.loc[frame]
 
-        gt_ids = g['id'].values
-        tr_ids = t['id'].values
-        gt_boxes = g['bbox'].values
-        tr_boxes = t['bbox'].values
+        gt_ids = g.index.get_level_values('Id').values
+        tr_ids = t.index.get_level_values('Id').values
+
+        gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
+        tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
 
         distances = np.full((len(gt_ids), len(tr_ids)), np.inf)
         for i, gt_box in enumerate(gt_boxes):
@@ -150,9 +130,8 @@ def compute_metrics(gt_data, tracker_data, evaluation_file, gt_file, tracker_res
                                        'num_misses', 'num_switches', \
                                        'num_fragmentations', 'mota', 'motp', "id_global_assignment", \
                                        "obj_frequencies"
-                                       ], outfile=evaluation_file, printsum=True, gt_path=gt_file, pred_path=tracker_results_file)
+                                       ], outfile=evaluation_file, printsum=True, df_gt=df_gt, df_pred=df_pred)
 
-    #summary = tm.compute(metrics=["hota_alpha"], outfile=evaluation_file, printsum=True, gt_path=gt_file, pred_path=tracker_results_file)
 
 
 if __name__ == '__main__':

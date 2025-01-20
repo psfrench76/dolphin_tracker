@@ -39,27 +39,25 @@ class TrackingMetrics:
         self.acc[0].update(gt_ids, tr_ids, distances)
 
     # modified from example here: https://github.com/cheind/py-motmetrics
-    def compute_hota(self, gt_path, pred_path):
-        # both of these files should be prepared in MOT15 format
-        df_gt = mm.io.loadtxt(gt_path)
-        df_pred = mm.io.loadtxt(pred_path)
+    def compute_hota(self, df_gt, df_pred):
         # Require different thresholds for matching
         th_list = np.arange(0.05, 0.99, 0.05)
         res_list = mm.utils.compare_to_groundtruth_reweighting(df_gt, df_pred, "iou", distth=th_list)
         return res_list
 
-    def compute(self, metrics, outfile=None, gt_path=None, pred_path=None, printsum=False):
+    def compute(self, metrics, outfile=None, df_gt=None, df_pred=None, printsum=False):
         self.metrics = metrics
 
         if any([m in self.metrics for m in self.HOTA_METRICS]):
-            if gt_path and pred_path:
-                hota_acc = self.compute_hota(gt_path, pred_path)
+            if df_gt and df_pred:
+
+                hota_acc = self.compute_hota(df_gt, df_pred)
                 self.acc.extend(hota_acc)
                 #self.acc = hota_acc
                 self.acc_names.append("HOTA")
 
             else:
-                raise "GT or Pred path results file not provided in call to 'TrackingMetrics.compute()'"
+                raise "GT or Pred results not provided in call to 'TrackingMetrics.compute()'"
         print(self.acc)
         print(self.metrics)
         print(self.acc_names)
