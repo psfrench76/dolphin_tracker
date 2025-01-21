@@ -22,7 +22,7 @@ module load cuda/12.4
 source /usr/local/apps/anaconda/2023.03/etc/profile.d/conda.sh
 source /nfs/stak/users/frenchp/.bashrc
 
-conda activate dolphin-v1
+conda activate dolphin-v2
 
 # run my job
 echo "Loading tensorboard from:"
