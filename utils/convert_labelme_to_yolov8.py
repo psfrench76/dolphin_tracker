@@ -5,6 +5,17 @@ import click
 # Configurable global variable to determine which class to convert
 CONVERT_CLASS = "Dolphin"
 
+"""
+This script converts a folder full of .json files, in the format output by labelme, into yolov8 format label files.
+
+The output files are in .txt format.
+
+This script can be used as part of a two-step process to generate a dataset from a single video from the original
+source. First, use this script to copy and convert the label files into a new dataset directory, into the 'labels'
+subdirectory. Second, use the 'cp -r' command to copy the image files to the 'images' subdirectory.
+
+Usage: convert_labelme_to_yolov8.py <input_dir> <output_dir>
+"""
 
 @click.command()
 @click.argument('input_dir', type=click.Path(exists=True))

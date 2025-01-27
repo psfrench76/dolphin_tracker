@@ -2,6 +2,11 @@ import os
 import json
 import sys
 
+"""
+This script takes an input directory of .json files (from the labelme converted format) and returns the maximum number
+of dolphins in any of the label files. As this can vary by frame this is useful to find out what the maximum number
+of dolphins in a given video is.
+"""
 
 def find_max_dolphins_per_frame(directory):
     max_dolphins = 0

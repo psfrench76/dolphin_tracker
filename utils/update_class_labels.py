@@ -4,7 +4,7 @@ import argparse
 
 """
 Processes JSON annotation files to update dolphin labels.
-
++
 This function iterates over all JSON files in the specified directory,
 filters out shapes that do not have exactly four points (i.e., non-rectangles),
 and updates the labels of the remaining shapes. If the `include_group_ids` flag

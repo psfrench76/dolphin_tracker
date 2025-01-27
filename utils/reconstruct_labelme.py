@@ -16,7 +16,8 @@ for efficiency. At the end of the run, the script reports how many examples from
 were skipped and the reasons for skipping (e.g., missing source files).
 
 Example usage:
-python utils/reconstruct_labelme.py --roboflow_dataset ../data/roboflow_dolphines_v8/train/ --output_folder ../data/rf_dolphines_v8_labelme/train/ --original_source ../data/original_source/collated/ --copyoriginaljpgs
+python utils/reconstruct_labelme.py --roboflow_dataset ../data/roboflow_dolphines_v8/train/ --output_folder 
+../data/rf_dolphines_v8_labelme/train/ --original_source ../data/original_source/collated/ --copyoriginaljpgs
 """
 
 def index_files(original_source):

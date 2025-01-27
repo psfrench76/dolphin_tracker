@@ -3,6 +3,15 @@ import shutil
 import re
 import sys
 
+"""
+This script walks through a file tree resembling the Box repository originally provided by Labrinto, and
+copies frames and labels based on video name and file type in a structured way to make things simpler to find.
+
+It extracts the video name from the file name, and the file type by the file extension.
+
+Usage: python collate_datafiles.py <input_path> <output_path>
+"""
+
 def sanitize_filename(filename):
     # Remove version numbers in parentheses e.g., "(1)"
     filename = re.sub(r'\(\d+\)', '', filename)

@@ -4,6 +4,17 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+"""
+This script walks through a file tree resembling the Box repository originally provided by Labrinto, and
+copies frames and labels based on video name and file type in a structured way to make things simpler to find.
+
+It extracts the video name from the file name, and the file type by the file extension.
+
+This is identical to collate_datafiles.py, except that it is threaded for faster performance.
+
+Usage: python collate_datafiles_threaded.py <input_path> <output_path>
+"""
+
 def sanitize_filename(filename):
     # Remove version numbers in parentheses e.g., "(1)"
     filename = re.sub(r'\(\d+\)', '', filename)
