@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import numpy as np
 import click
+import re
+import torch
 from tracking_metrics import TrackingMetrics
 
 
@@ -11,9 +13,12 @@ from tracking_metrics import TrackingMetrics
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
 @click.option('--model', required=True, help="Path to the model file.")
 @click.option('--output', required=True, help="Path to the output directory.")
-def run_tracking_and_evaluation(dataset, model, output):
+@click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
+def run_tracking_and_evaluation(dataset, model, output, botsort):
     images_directory = os.path.join(dataset, "images")
     label_directory = os.path.join(dataset, "labels")
+
+    print(f"Cuda available: {torch.cuda.is_available()}")
 
     # Load model and determine model name
     model_instance = YOLO(model)
@@ -28,9 +33,13 @@ def run_tracking_and_evaluation(dataset, model, output):
     metrics_file_path = os.path.join(output, f'{model_name}_mot_evaluation.csv')
 
     # Run tracking
-    results = model_instance.track(source=images_directory, tracker="bytetrack.yaml", stream=True)
+    tracker = "bytetrack.yaml"
+    if botsort:
+        tracker = "botsort.yaml"
 
-    save_tracker_results(results_file_path, results)
+    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device="0")
+    print(results)
+    save_tracker_results(images_directory, results_file_path, results)
     save_ground_truth(gt_file_path, label_directory)
 
     df_gt = mm.io.loadtxt(gt_file_path)
@@ -39,16 +48,21 @@ def run_tracking_and_evaluation(dataset, model, output):
     compute_metrics(metrics_file_path, df_gt, df_pred)
 
 
-def save_tracker_results(file_path, results):
+def save_tracker_results(images_directory, file_path, results):
     with open(file_path, 'w') as f:
-        for frame_id, result in enumerate(results):
+        files = [f for f in os.listdir(images_directory) if f.endswith('.jpg')]
+        files.sort()
+        for i, result in enumerate(results):
+            pattern = r"(\d+)(?=[._](jpg))"
+            match = re.search(pattern, files[i])
+            frame_id = match.group(1)
             for box in result.boxes:
                 if box.id:
                     bbox = box.xyxyn[0].tolist()
                     track_id = int(box.id.item())
                     conf = box.conf.item()
                     f.write(
-                        f'{frame_id + 1},{track_id},{bbox[0]},{bbox[1]},{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},-1,-1,{conf}\n')
+                        f'{frame_id},{track_id},{bbox[0]},{bbox[1]},{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},-1,-1,{conf}\n')
 
 
 def save_ground_truth(gt_file_path, label_directory):
@@ -58,7 +72,14 @@ def save_ground_truth(gt_file_path, label_directory):
     data = []
 
     # Read and process each file
-    for i, filename in enumerate(files, start=1):
+    for filename in files:
+        pattern = r"(\d+)(?=[._](jpg|txt|json))"
+        match = re.search(pattern, filename)
+        if not match:
+            raise f"Could not process filename {label_directory}/{filename}"
+
+        frame_id = match.group(1)
+
         filepath = os.path.join(label_directory, filename)
         with open(filepath, 'r') as infile:
             content = infile.read()
@@ -68,10 +89,10 @@ def save_ground_truth(gt_file_path, label_directory):
                     # Add frame number as the first element
                     line_data = line.split(" ")
                     # Replace any box IDs of 0
-                    if line_data[0] == '0':
+                    if line_data[0] == '0' or line_data[0] == 'None':
                         line_data[0] = str(next_id)
                         next_id += 1
-                    data.append([i] + line_data)
+                    data.append([frame_id] + line_data)
 
     # Convert list to DataFrame
     gt_data = pd.DataFrame(data, columns=['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max'])
@@ -95,7 +116,7 @@ def calculate_iou_shapely(box_1, box2):
 def compute_metrics(evaluation_file, df_gt, df_pred):
     tm = TrackingMetrics()
 
-    frames = sorted(set(df_gt.index.get_level_values('FrameId')).union(
+    frames = sorted(set(df_gt.index.get_level_values('FrameId')).intersection(
         set(df_pred.index.get_level_values('FrameId'))))
 
     for frame in frames:
@@ -105,24 +126,30 @@ def compute_metrics(evaluation_file, df_gt, df_pred):
         gt_ids = g.index.get_level_values('Id').values
         tr_ids = t.index.get_level_values('Id').values
 
+        # print(f"Frame: {frame} IDs: GT: {gt_ids}, Pred: {tr_ids}")
+
         gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
         tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
+
+        # print(f"GT Boxes: {gt_boxes}\n PR boxes: {tr_boxes}")
 
         distances = np.full((len(gt_ids), len(tr_ids)), np.inf)
         for i, gt_box in enumerate(gt_boxes):
             for j, tr_box in enumerate(tr_boxes):
+                # print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
                 iou = calculate_iou_shapely(gt_box, tr_box)
+                # print(f"IOU: {iou}")
                 if iou > 0.5:
                     distances[i, j] = 1 - iou
 
         # Before updating the accumulator, print the current frame and IDs
-        print(f"Processing frame: {frame}")
+        print(f"\nProcessing frame: {frame}")
         print(f"Ground truth IDs: {gt_ids}")
-        print(f"Tracker IDs: {tr_ids}")
+        print(f"Tracker IDs: {tr_ids}\n")
 
         # Update the accumulator
-        tm.update(gt_ids, tr_ids, distances)
-
+        tm.update(gt_ids, tr_ids, distances, frame)
+    tm.print_events()
     summary = tm.compute(metrics=['num_frames', 'idf1', 'idp', 'idr', \
                                        'recall', 'precision', 'num_objects', \
                                        'mostly_tracked', 'partially_tracked', \

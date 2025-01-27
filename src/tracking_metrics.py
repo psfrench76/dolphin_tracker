@@ -30,13 +30,13 @@ class TrackingMetrics:
     HOTA_METRICS = ['hota_alpha', 'assa_alpha', 'deta_alpha']
 
     def __init__(self):
-        self.acc = [mm.MOTAccumulator(auto_id=True)]
+        self.acc = [mm.MOTAccumulator(auto_id=False)]
         self.acc_names = ['Default']
         self.mh = mm.metrics.create()
         self.metrics = None
 
-    def update(self, gt_ids, tr_ids, distances):
-        self.acc[0].update(gt_ids, tr_ids, distances)
+    def update(self, gt_ids, tr_ids, distances, frame_id):
+        self.acc[0].update(gt_ids, tr_ids, distances, frameid=frame_id)
 
     # modified from example here: https://github.com/cheind/py-motmetrics
     def compute_hota(self, df_gt, df_pred):
@@ -81,3 +81,6 @@ class TrackingMetrics:
             #namemap={"hota_alpha": "HOTA", "assa_alpha": "ASSA", "deta_alpha": "DETA"},
         )
         print(strsummary)
+
+    def print_events(self):
+        print(self.acc[0].mot_events)
