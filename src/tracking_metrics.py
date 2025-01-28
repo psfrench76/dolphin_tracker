@@ -25,7 +25,11 @@ class TrackingMetrics:
         'motp': 'MOTP',
         'id_global_assignment': 'ID_Global_Assn',
         'obj_frequencies': 'Object_Freq',
-        'num_unique_objects': 'Num_Unique_Objects'
+        'num_unique_objects': 'Num_Unique_Objects',
+        'idfp': 'ID_False_Pos',
+        'idfn': 'ID_False_Neg',
+        'idtp': 'ID_True_Pos',
+        'num_matches': 'Num_Matches'
     }
     HOTA_METRICS = ['hota_alpha', 'assa_alpha', 'deta_alpha']
 
@@ -62,7 +66,7 @@ class TrackingMetrics:
         print(self.metrics)
         print(self.acc_names)
 
-        summary = self.mh.compute_many(self.acc, self.metrics, names=self.acc_names)
+        summary = self.mh.compute_many(self.acc, metrics=self.metrics, names=self.acc_names)
         #summary = self.mh.compute_many(self.acc, self.metrics, generate_overall=True)
         if outfile:
             summary.to_csv(outfile)
@@ -84,3 +88,7 @@ class TrackingMetrics:
 
     def print_events(self):
         print(self.acc[0].mot_events)
+
+    def write_events(self, filename):
+        self.acc[0].mot_events.to_csv(filename)
+
