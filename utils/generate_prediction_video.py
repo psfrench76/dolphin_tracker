@@ -18,7 +18,8 @@ to improve file transfer time).
 @click.option('--bbox_file', required=True, help="Path to the bounding box prediction file (MOT15 format).")
 @click.option('--output_folder', required=True, help="Path to the output folder for the video file.")
 @click.option('--resize_ratio', default=1.0, type=float, help="Ratio by which to resize the frames (e.g., 0.5 for half size).")
-def generate_video(image_folder, bbox_file, output_folder, resize_ratio):
+@click.option('--gt', is_flag=True, help="Label as ground truth video")
+def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     # Read the bounding box file
     bboxes = pd.read_csv(bbox_file, header=None)
     bboxes.columns = ['frame', 'id', 'x', 'y', 'w', 'h', 'score', 'class', 'visibility']
@@ -29,17 +30,12 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio):
         click.echo("No images found in the specified folder.")
         return
 
-    # Regex pattern to extract frame number and base name
-    pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
+    run_name = os.path.basename(os.path.normpath(output_folder))
 
-    # Extract base name for output video
-    match = re.match(pattern, image_files[0])
-    if match:
-        base_name = match.group(1)
+    if gt:
+        output_video_path = os.path.join(output_folder, f"{run_name}_gt.mp4")
     else:
-        click.echo("Could not extract base name from image files.")
-        return
-    output_video_path = os.path.join(output_folder, f"{base_name}_predictions.mp4")
+        output_video_path = os.path.join(output_folder, f"{run_name}_predictions.mp4")
 
     # Initialize video writer
     first_image_path = os.path.join(image_folder, image_files[0])
@@ -62,8 +58,12 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio):
     ]
     track_colors = {}
 
+    # Regex pattern to extract frame number and base name
+    pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
+
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames"):
+
         match = re.search(pattern, image_file)
         if match:
             frame_number = int(match.group(2))
