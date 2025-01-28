@@ -14,7 +14,8 @@ from tracking_metrics import TrackingMetrics
 @click.option('--model', required=True, help="Path to the model file.")
 @click.option('--output', required=True, help="Path to the output directory.")
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
-def run_tracking_and_evaluation(dataset, model, output, botsort):
+@click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
+def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
     images_directory = os.path.join(dataset, "images")
     label_directory = os.path.join(dataset, "labels")
 
@@ -27,33 +28,47 @@ def run_tracking_and_evaluation(dataset, model, output, botsort):
     # Create output directory if it doesn't exist
     os.makedirs(output, exist_ok=True)
 
-    # Construct output filenames
-    gt_file_path = os.path.join(output, f'{model_name}_gt_formatted.txt')
-    results_file_path = os.path.join(output, f'{model_name}_results.txt')
-    metrics_file_path = os.path.join(output, f'{model_name}_mot_evaluation.csv')
+    # Extract the closest level directory name from the output path
+    run_name = os.path.basename(os.path.normpath(output))
+
+    # Construct output filenames using the closest level directory name
+    gt_file_path = os.path.join(output, f'{run_name}_gt_formatted.txt')
+    results_file_path = os.path.join(output, f'{run_name}_results.txt')
+    metrics_file_path = os.path.join(output, f'{run_name}_mot_evaluation.csv')
+    metrics_events_path = os.path.join(output, f'{run_name}_mot_events.csv')
+    researcher_output_path = os.path.join(output, f'{run_name}_output.csv')
 
     # Run tracking
     tracker = "bytetrack.yaml"
     if botsort:
         tracker = "botsort.yaml"
 
-    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device="0")
+    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device="0",
+                                   persist=(not nopersist))
     print(results)
-    save_tracker_results(images_directory, results_file_path, results)
-    save_ground_truth(gt_file_path, label_directory)
+    save_tracker_results(images_directory, results_file_path, results, researcher_outpath=researcher_output_path)
+    if os.path.exists(label_directory):
+        save_ground_truth(gt_file_path, label_directory)
 
-    df_gt = mm.io.loadtxt(gt_file_path)
-    df_pred = mm.io.loadtxt(results_file_path)
+        df_gt = mm.io.loadtxt(gt_file_path)
+        df_pred = mm.io.loadtxt(results_file_path)
 
-    compute_metrics(metrics_file_path, df_gt, df_pred)
+        compute_metrics(metrics_file_path, metrics_events_path, df_gt, df_pred)
+    else:
+        print(f"No ground truth label directory found; looked for {label_directory}. Not running metrics calculations.")
 
 
-def save_tracker_results(images_directory, file_path, results):
+def save_tracker_results(images_directory, file_path, results, researcher_outpath=None):
+    files = [f for f in os.listdir(images_directory) if f.endswith('.jpg')]
+    files.sort()
+    pattern = r"(\d+)(?=[._](jpg))"
+
     with open(file_path, 'w') as f:
-        files = [f for f in os.listdir(images_directory) if f.endswith('.jpg')]
-        files.sort()
+        if researcher_outpath:
+            rf = open(researcher_outpath, 'w')
+            rf.write(f'FrameID,ObjectID,Point1X,Point1Y,Point2X,Point2Y,Width,Height,CenterX,CenterY\n')
+
         for i, result in enumerate(results):
-            pattern = r"(\d+)(?=[._](jpg))"
             match = re.search(pattern, files[i])
             frame_id = match.group(1)
             for box in result.boxes:
@@ -63,6 +78,14 @@ def save_tracker_results(images_directory, file_path, results):
                     conf = box.conf.item()
                     f.write(
                         f'{frame_id},{track_id},{bbox[0]},{bbox[1]},{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},-1,-1,{conf}\n')
+                    if rf:
+                        rf.write(
+                            f'{frame_id},{track_id},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'
+                            f'{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},'
+                            f'{(bbox[0] + bbox[2]) / 2},{(bbox[1] + bbox[3]) / 2}\n')
+
+        if rf:
+            rf.close()
 
 
 def save_ground_truth(gt_file_path, label_directory):
@@ -113,7 +136,7 @@ def calculate_iou_shapely(box_1, box2):
     return intersection / union if union != 0 else 0
 
 
-def compute_metrics(evaluation_file, df_gt, df_pred):
+def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
     tm = TrackingMetrics()
 
     frames = sorted(set(df_gt.index.get_level_values('FrameId')).intersection(
@@ -126,19 +149,23 @@ def compute_metrics(evaluation_file, df_gt, df_pred):
         gt_ids = g.index.get_level_values('Id').values
         tr_ids = t.index.get_level_values('Id').values
 
-        # print(f"Frame: {frame} IDs: GT: {gt_ids}, Pred: {tr_ids}")
+        print(f"Frame: {frame} IDs: GT: {gt_ids}, Pred: {tr_ids}")
 
-        gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
-        tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
+        #gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
+        #tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
 
-        # print(f"GT Boxes: {gt_boxes}\n PR boxes: {tr_boxes}")
+
+        gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in g.iterrows()]
+        tr_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in t.iterrows()]
+
+        print(f"GT Boxes: {gt_boxes}\n PR boxes: {tr_boxes}")
 
         distances = np.full((len(gt_ids), len(tr_ids)), np.inf)
         for i, gt_box in enumerate(gt_boxes):
             for j, tr_box in enumerate(tr_boxes):
-                # print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
+                print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
                 iou = calculate_iou_shapely(gt_box, tr_box)
-                # print(f"IOU: {iou}")
+                print(f"IOU: {iou}")
                 if iou > 0.5:
                     distances[i, j] = 1 - iou
 
@@ -151,6 +178,7 @@ def compute_metrics(evaluation_file, df_gt, df_pred):
         tm.update(gt_ids, tr_ids, distances, frame)
     tm.print_events()
     summary = tm.compute(metrics=['num_frames', 'idf1', 'idp', 'idr', \
+                                       'idfp', 'idfn', 'idtp', 'num_matches', \
                                        'recall', 'precision', 'num_objects', \
                                        'mostly_tracked', 'partially_tracked', \
                                        'mostly_lost', 'num_false_positives', \
@@ -158,6 +186,8 @@ def compute_metrics(evaluation_file, df_gt, df_pred):
                                        'num_fragmentations', 'mota', 'motp', "id_global_assignment", \
                                        "obj_frequencies"
                                        ], outfile=evaluation_file, printsum=True, df_gt=df_gt, df_pred=df_pred)
+
+    tm.write_events(events_file)
 
 
 
