@@ -97,6 +97,9 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
             cv2.rectangle(frame, (x, y), (x + w, y + h), track_colors[track_id], 2)
             cv2.putText(frame, f'ID: {track_id}', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, track_colors[track_id], 2)
 
+        # Add frame ID to the lower left corner
+        cv2.putText(frame, f'Frame: {frame_number}', (10, new_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
         # Write the frame to the video
         video_writer.write(frame)
 
