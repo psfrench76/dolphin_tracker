@@ -103,18 +103,22 @@ dependencies:
   - zlib=1.2.13=h5eee18b_1
   - zstd=1.5.6=hc292b87_0
   - pip:
+      - absl-py==2.1.0
       - click==8.1.8
       - contourpy==1.3.1
       - cycler==0.12.1
       - fonttools==4.55.3
       - fsspec==2024.12.0
+      - grpcio==1.70.0
       - kiwisolver==1.4.8
       - lap==0.5.12
+      - markdown==3.7
       - matplotlib==3.10.0
       - motmetrics==1.4.0
       - opencv-python==4.11.0.86
       - packaging==24.2
       - pandas==2.2.3
+      - protobuf==5.29.3
       - psutil==6.1.1
       - py-cpuinfo==9.0.0
       - pyparsing==3.2.1
@@ -125,9 +129,12 @@ dependencies:
       - shapely==2.0.6
       - six==1.17.0
       - sympy==1.13.1
+      - tensorboard==2.18.0
+      - tensorboard-data-server==0.7.2
       - tqdm==4.67.1
       - tzdata==2024.2
       - ultralytics==8.3.65
       - ultralytics-thop==2.0.14
+      - werkzeug==3.1.3
       - xmltodict==0.14.2
 prefix: /nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2
