@@ -27,7 +27,7 @@ conda activate dolphin-v2
 # run my job
 echo "Loading tensorboard from:"
 which tensorboard
-tensorboard --port=6999 --logdir=/nfs/stak/users/frenchp/AI506/dolphin_tracker/saves/ &
+tensorboard --port=6999 --logdir=/nfs/stak/users/frenchp/AI506/dolphin_tracker/runs/ &
 
 # run my job
 echo "Loading jupyter from:"

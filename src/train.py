@@ -9,6 +9,7 @@ import shutil
 import multiprocessing
 import psutil
 import timeit
+from torch.utils.tensorboard import SummaryWriter
 
 @click.command()
 @click.option('--model_name', default=None, help='Path to the model configuration file.')
@@ -50,7 +51,7 @@ def train_detector(model_name, data_name):
     num_cores = len(psutil.Process().cpu_affinity())
 
     # Set the number of workers to the recommended value
-    num_workers = min(16, num_cores) / 2
+    num_workers = int(min(16, num_cores) / 2)
 
     print(f"Number of available CPU cores: {num_cores}")
     print(f"Setting number of workers to: {num_workers} (divided by 2 for train/val split)")
