@@ -1,0 +1,16 @@
+epochs: 5
+
+model_config_dir: 'cfg/models'
+data_config_dir: 'cfg/data'
+model_config_default: 'cfg/models/yolo11m_toy.yaml'
+data_config_default: 'cfg/data/toy_detector.yaml'
+amp_check_models_dir: '../saves/pretrained'
+
+train:
+  project: '../runs/train'
+
+val:
+  project: '../runs/val'
+
+test:
+  project: '../runs/test'
