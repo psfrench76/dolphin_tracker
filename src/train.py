@@ -50,8 +50,14 @@ def train_detector(model_name, data_name):
     # Check for CUDA availability
     if torch.cuda.is_available():
         print("CUDA is available.")
+        gpu_count = torch.cuda.device_count()
+        device = [i for i in range (gpu_count)]
+        print("Using GPU device(s):", device)
     else:
         print("CUDA is not available.")
+        device = 'cpu'
+
+    os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 
     print(f"Loading pretrained weights from {pretrained_file}")
     model = YOLO(pretrained_file)
@@ -59,7 +65,7 @@ def train_detector(model_name, data_name):
     now = timeit.default_timer()
     print(f"Training model {model_name} on data {data_name}")
     results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                            cfg=model_settings['hyp'])
+                            cfg=model_settings['hyp'], device=device)
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
     # Check for downloaded .pt files and move them out of the current directory

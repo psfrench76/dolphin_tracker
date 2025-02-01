@@ -1,4 +1,4 @@
-path: 'data/roboflow_dolphines_v8'
+path: '../../data/roboflow_dolphines_v8'
 train: 'train/images'
 val: 'valid/images'
 test: 'test/images'

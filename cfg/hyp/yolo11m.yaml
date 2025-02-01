@@ -4,7 +4,7 @@ optimizer: AdamW
 epochs: 20
 save_period: 50
 imgsz: 640
-batch: 32
+batch: 48
 single_cls: True
 
 # Optimzer Hyperparameters

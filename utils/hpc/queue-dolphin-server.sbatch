@@ -7,7 +7,7 @@
 #SBATCH -c 8             # number of cores per task
 #SBATCH --time=7-00:00:00  # time needed for job
 #SBATCH --mem=32g        # memory needed for job
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:3
 #SBATCH --constraint=v100|a40|rtx8000|h100
 
 # gather basic information, can be useful for troubleshooting
