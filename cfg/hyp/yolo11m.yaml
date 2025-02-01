@@ -1,7 +1,7 @@
 # Trainer settings
 task: 'detect'
 optimizer: AdamW
-epochs: 20
+epochs: 100
 save_period: 50
 imgsz: 640
 batch: 48
