@@ -1,16 +1,12 @@
-epochs: 5
-
+# File System Organization
 model_config_dir: 'cfg/models'
 data_config_dir: 'cfg/data'
-model_config_default: 'cfg/models/yolo11m_toy.yaml'
-data_config_default: 'cfg/data/toy_detector.yaml'
+runs_dir: '../runs/'
 amp_check_models_dir: '../saves/pretrained'
 
-train:
-  project: '../runs/train'
+# Defaults
+model_config_default: 'yolo11ml'
+data_config_default: 'roboflow_dolphines_v8'
 
-val:
-  project: '../runs/val'
 
-test:
-  project: '../runs/test'
+
