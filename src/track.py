@@ -8,6 +8,7 @@ import re
 import torch
 from tracking_metrics import TrackingMetrics
 import yaml
+import cv2
 
 
 @click.command()
@@ -76,6 +77,8 @@ def save_tracker_results(images_directory, file_path, results, researcher_outpat
     files.sort()
     pattern = r"(\d+)(?=[._](jpg))"
 
+    img_height, img_width = cv2.imread(os.path.join(images_directory, files[0])).shape[:2]
+
     with open(file_path, 'w') as f:
         if researcher_outpath:
             rf = open(researcher_outpath, 'w')
@@ -89,13 +92,17 @@ def save_tracker_results(images_directory, file_path, results, researcher_outpat
                     bbox = box.xyxyn[0].tolist()
                     track_id = int(box.id.item())
                     conf = box.conf.item()
+                    point_a_x, point_a_y, point_b_x, point_b_y = bbox
+                    width = point_b_x - point_a_x
+                    height = point_b_y - point_a_y
                     f.write(
-                        f'{frame_id},{track_id},{bbox[0]},{bbox[1]},{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},-1,-1,{conf}\n')
+                        f'{frame_id},{track_id},{point_a_x},{point_a_y},{width},{height},-1,-1,{conf}\n')
                     if rf:
                         rf.write(
-                            f'{frame_id},{track_id},{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]},'
-                            f'{bbox[2] - bbox[0]},{bbox[3] - bbox[1]},'
-                            f'{(bbox[0] + bbox[2]) / 2},{(bbox[1] + bbox[3]) / 2}\n')
+                            f'{frame_id},{track_id},{point_a_x * img_width},{point_a_y * img_height},'
+                            f'{point_b_x * img_width},{point_b_y * img_height},'
+                            f'{width * img_width},{height * img_height},'
+                            f'{(point_a_x + point_b_x) * img_width / 2},{(point_a_y + point_b_y) * img_height / 2}\n')
 
         if rf:
             rf.close()
@@ -197,7 +204,7 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
 
     tm.write_events(events_file)
 
-
+    print(f"\nResults written to {evaluation_file}")
 
 if __name__ == '__main__':
     run_tracking_and_evaluation()
