@@ -7,6 +7,7 @@ import click
 import re
 import torch
 from tracking_metrics import TrackingMetrics
+import yaml
 
 
 @click.command()
@@ -16,10 +17,22 @@ from tracking_metrics import TrackingMetrics
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
 def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
+    print(f"Loading configuration files...")
+    config = 'dolphin_tracker/cfg/settings.yaml'
+
+    with open(config, 'r') as file:
+        settings = yaml.safe_load(file)
+
     images_directory = os.path.join(dataset, "images")
     label_directory = os.path.join(dataset, "labels")
 
-    print(f"Cuda available: {torch.cuda.is_available()}")
+    # Check for CUDA availability
+    if torch.cuda.is_available():
+        print("CUDA is available.")
+        device = '0'
+    else:
+        print("CUDA is not available.")
+        device = 'cpu'
 
     # Load model and determine model name
     model_instance = YOLO(model)
@@ -32,18 +45,18 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
     run_name = os.path.basename(os.path.normpath(output))
 
     # Construct output filenames using the closest level directory name
-    gt_file_path = os.path.join(output, f'{run_name}_gt_formatted.txt')
-    results_file_path = os.path.join(output, f'{run_name}_results.txt')
-    metrics_file_path = os.path.join(output, f'{run_name}_mot_evaluation.csv')
-    metrics_events_path = os.path.join(output, f'{run_name}_mot_events.csv')
-    researcher_output_path = os.path.join(output, f'{run_name}_output.csv')
+    gt_file_path = os.path.join(output, f'{run_name}_{settings["gt_file_suffix"]}')
+    results_file_path = os.path.join(output, f'{run_name}_{settings["results_file_suffix"]}')
+    metrics_file_path = os.path.join(output, f'{run_name}_{settings["metrics_file_suffix"]}')
+    metrics_events_path = os.path.join(output, f'{run_name}_{settings["metrics_events_suffix"]}')
+    researcher_output_path = os.path.join(output, f'{run_name}_{settings["researcher_output_suffix"]}')
 
     # Run tracking
-    tracker = "bytetrack.yaml"
+    tracker = settings['ultralytics_bytetrack']
     if botsort:
-        tracker = "botsort.yaml"
+        tracker = settings['ultralytics_botsort']
 
-    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device="0",
+    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device=device,
                                    persist=(not nopersist))
     print(results)
     save_tracker_results(images_directory, results_file_path, results, researcher_outpath=researcher_output_path)
@@ -139,6 +152,11 @@ def calculate_iou_shapely(box_1, box2):
 def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
     tm = TrackingMetrics()
 
+    with open('dolphin_tracker/cfg/settings.yaml', 'r') as file:
+        settings = yaml.safe_load(file)
+
+    metrics = settings['tracking_metrics']
+
     frames = sorted(set(df_gt.index.get_level_values('FrameId')).intersection(
         set(df_pred.index.get_level_values('FrameId'))))
 
@@ -177,15 +195,7 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
         # Update the accumulator
         tm.update(gt_ids, tr_ids, distances, frame)
     tm.print_events()
-    summary = tm.compute(metrics=['num_frames', 'idf1', 'idp', 'idr', \
-                                       'idfp', 'idfn', 'idtp', 'num_matches', \
-                                       'recall', 'precision', 'num_objects', \
-                                       'mostly_tracked', 'partially_tracked', \
-                                       'mostly_lost', 'num_false_positives', \
-                                       'num_misses', 'num_switches', \
-                                       'num_fragmentations', 'mota', 'motp', "id_global_assignment", \
-                                       "obj_frequencies"
-                                       ], outfile=evaluation_file, printsum=True, df_gt=df_gt, df_pred=df_pred)
+    summary = tm.compute(metrics=metrics, outfile=evaluation_file, printsum=True, df_gt=df_gt, df_pred=df_pred)
 
     tm.write_events(events_file)
 

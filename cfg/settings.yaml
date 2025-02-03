@@ -4,3 +4,37 @@ runs_dir: '../runs/'
 amp_check_models_dir: '../saves/pretrained'
 pretrained_models_dir: '../saves/pretrained'
 hyp_config_dir: 'cfg/hyp'
+
+# Tracking results files
+gt_file_suffix: 'gt_formatted.txt'
+results_file_suffix: 'results.txt'
+metrics_file_suffix: 'mot_evaluation.csv'
+metrics_events_suffix: 'mot_events.csv'
+researcher_output_suffix: 'output.csv'
+
+ultralytics_bytetrack: 'bytetrack.yaml'
+ultralytics_botsort: 'botsort.yaml'
+
+tracking_metrics:
+  - num_frames
+  - idf1
+  - idp
+  - idr
+  - idfp
+  - idfn
+  - idtp
+  - num_matches
+  - recall
+  - precision
+  - num_objects
+  - mostly_tracked
+  - partially_tracked
+  - mostly_lost
+  - num_false_positives
+  - num_misses
+  - num_switches
+  - num_fragmentations
+  - mota
+  - motp
+  - id_global_assignment
+  - obj_frequencies
