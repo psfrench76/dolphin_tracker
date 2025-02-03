@@ -1,2 +1,0 @@
-hyp: 'cfg/hyp/yolo11m.yaml'
-pretrained_model: '../saves/pretrained/yolo11m.pt'

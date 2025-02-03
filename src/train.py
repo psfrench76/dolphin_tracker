@@ -10,9 +10,11 @@ import psutil
 import timeit
 
 @click.command()
-@click.option('--model_name', default=None, help='Path to the model configuration file.')
-@click.option('--data_name', default=None, help='Path to the data configuration file.')
-def train_detector(model_name, data_name):
+@click.option('--data_name', required=True, help='Name of the data configuration file.')
+@click.option('--run_name', required=True, help='Name of the run. Expected: exp##/param-desc')
+@click.option('--hyp_path', required=True, help='Path to the hyperparameter configuration file.')
+@click.option('--weights_path', required=True, help='Path to the pretrained weights file.')
+def train_detector(data_name, run_name, hyp_path, weights_path):
     print(f"Loading configuration files...")
     config = 'cfg/settings.yaml'
     phase = 'train'
@@ -20,23 +22,12 @@ def train_detector(model_name, data_name):
     with open(config, 'r') as file:
         settings = yaml.safe_load(file)
 
-    model_name = model_name or settings['model_config_default']
-    model_config = os.path.join(settings['model_config_dir'], model_name) + '.yaml'
-    with open(model_config, 'r') as file:
-        model_settings = yaml.safe_load(file)
-        print(f"Found model configuration file {model_config} and successfully loaded")
-
-    data_name = data_name or settings['data_config_default']
     data_config = os.path.join(settings['data_config_dir'], data_name) + '.yaml'
-    with open(data_config, 'r') as file:
-        data_settings = yaml.safe_load(file)
-        print(f"Found data configuration file {data_config} and successfully loaded")
 
-    pretrained_file = model_settings['pretrained_model']
-    project = os.path.join(settings['runs_dir'], phase)
+    project = os.path.join(settings['runs_dir'], phase, 'stage1')
 
     run_number = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    name = f'{model_name}/{data_name}/{run_number}'
+    name = f'{run_name}/{run_number}'
 
     # Detect the number of available CPU cores
     num_cores = len(psutil.Process().cpu_affinity())
@@ -59,13 +50,13 @@ def train_detector(model_name, data_name):
 
     os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 
-    print(f"Loading pretrained weights from {pretrained_file}")
-    model = YOLO(pretrained_file)
+    print(f"Loading pretrained weights from {weights_path}")
+    model = YOLO(weights_path)
 
     now = timeit.default_timer()
-    print(f"Training model {model_name} on data {data_name}")
+    print(f"Training model {run_name} on data {data_name}")
     results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                            cfg=model_settings['hyp'], device=device)
+                            cfg=hyp_path, device=device)
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
     # Check for downloaded .pt files and move them out of the current directory

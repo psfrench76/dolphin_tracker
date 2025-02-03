@@ -1,4 +1,4 @@
-path: 'data/toy_detector'
+path: '../../data/toy_detector'
 train: 'images/train'
 val: 'images/val'
 test: 'images/test'

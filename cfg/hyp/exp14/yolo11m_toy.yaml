@@ -1,0 +1,14 @@
+# Trainer settings
+task: 'detect'
+optimizer: AdamW
+epochs: 5
+imgsz: 640
+batch: 48
+single_cls: True
+
+# Optimzer Hyperparameters
+lr0: 0.01
+lrf: 0.1
+weight_decay: 0.0005
+momentum: 0.937
+dropout: 0.0

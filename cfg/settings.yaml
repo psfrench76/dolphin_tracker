@@ -1,12 +1,6 @@
 # File System Organization
-model_config_dir: 'cfg/models'
 data_config_dir: 'cfg/data'
 runs_dir: '../runs/'
 amp_check_models_dir: '../saves/pretrained'
-
-# Defaults
-model_config_default: 'yolo11ml'
-data_config_default: 'roboflow_dolphines_v8'
-
-
-
+pretrained_models_dir: '../saves/pretrained'
+hyp_config_dir: 'cfg/hyp'
