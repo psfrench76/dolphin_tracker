@@ -7,20 +7,20 @@ class TrackingMetrics:
         'hota_alpha': 'HOTA',
         'assa_alpha': 'ASSA',
         'deta_alpha': 'DETA',
-        'num_frames': 'Num_Frames',
+        'num_frames': 'Frames',
         'idf1': 'ID_F1',
         'idp': 'ID_Precision',
         'idr': 'ID_Recall',
         'recall': 'Recall',
         'precision': 'Precision',
         'num_objects': 'Objects',
-        'mostly_tracked': 'Mostly_Tracked',
-        'partially_tracked': 'Part_Tracked',
+        'mostly_tracked': 'Mostly_Track',
+        'partially_tracked': 'Part_Track',
         'mostly_lost': 'Mostly_Lost',
         'num_false_positives': 'False_Pos',
         'num_misses': 'Misses',
         'num_switches': 'Switches',
-        'num_fragmentations': 'Fragmentations',
+        'num_fragmentations': 'Fragmt.',
         'mota': 'MOTA',
         'motp': 'MOTP',
         'id_global_assignment': 'ID_Global_Assn',
@@ -84,7 +84,7 @@ class TrackingMetrics:
             namemap=self.METRIC_NAMES,
             #namemap={"hota_alpha": "HOTA", "assa_alpha": "ASSA", "deta_alpha": "DETA"},
         )
-        print(strsummary)
+        print("\n" + strsummary)
 
     def print_events(self):
         print(self.acc[0].mot_events)

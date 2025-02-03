@@ -16,25 +16,19 @@ ultralytics_bytetrack: 'bytetrack.yaml'
 ultralytics_botsort: 'botsort.yaml'
 
 tracking_metrics:
-  - num_frames
+  - mota
+  - motp
   - idf1
-  - idp
-  - idr
-  - idfp
-  - idfn
-  - idtp
-  - num_matches
-  - recall
-  - precision
   - num_objects
-  - mostly_tracked
-  - partially_tracked
-  - mostly_lost
   - num_false_positives
   - num_misses
   - num_switches
   - num_fragmentations
-  - mota
-  - motp
-  - id_global_assignment
-  - obj_frequencies
+  - num_frames
+  - idfp
+  - idfn
+  - idtp
+  - num_matches
+  - mostly_tracked
+  - partially_tracked
+  - mostly_lost
