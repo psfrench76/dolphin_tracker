@@ -62,9 +62,9 @@ class TrackingMetrics:
 
             else:
                 raise "GT or Pred results not provided in call to 'TrackingMetrics.compute()'"
-        print(self.acc)
-        print(self.metrics)
-        print(self.acc_names)
+        #print(self.acc)
+        #print(self.metrics)
+        #print(self.acc_names)
 
         summary = self.mh.compute_many(self.acc, metrics=self.metrics, names=self.acc_names)
         #summary = self.mh.compute_many(self.acc, self.metrics, generate_overall=True)

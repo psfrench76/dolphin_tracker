@@ -58,7 +58,7 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
 
     results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device=device,
                                    persist=(not nopersist))
-    print(results)
+
     save_tracker_results(images_directory, results_file_path, results, researcher_outpath=researcher_output_path)
     if os.path.exists(label_directory):
         save_ground_truth(gt_file_path, label_directory)
@@ -167,7 +167,7 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
         gt_ids = g.index.get_level_values('Id').values
         tr_ids = t.index.get_level_values('Id').values
 
-        print(f"Frame: {frame} IDs: GT: {gt_ids}, Pred: {tr_ids}")
+        #print(f"Frame: {frame} IDs: GT: {gt_ids}, Pred: {tr_ids}")
 
         #gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
         #tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
@@ -176,25 +176,23 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
         gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in g.iterrows()]
         tr_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in t.iterrows()]
 
-        print(f"GT Boxes: {gt_boxes}\n PR boxes: {tr_boxes}")
+        #print(f"GT Boxes: {gt_boxes}\n PR boxes: {tr_boxes}")
 
         distances = np.full((len(gt_ids), len(tr_ids)), np.inf)
         for i, gt_box in enumerate(gt_boxes):
             for j, tr_box in enumerate(tr_boxes):
-                print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
+                #print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
                 iou = calculate_iou_shapely(gt_box, tr_box)
-                print(f"IOU: {iou}")
+                #print(f"IOU: {iou}")
                 if iou > 0.5:
                     distances[i, j] = 1 - iou
 
         # Before updating the accumulator, print the current frame and IDs
-        print(f"\nProcessing frame: {frame}")
-        print(f"Ground truth IDs: {gt_ids}")
-        print(f"Tracker IDs: {tr_ids}\n")
+        print(f"Processing frame: {frame} Ground truth IDs: {gt_ids} Tracker IDs: {tr_ids}")
 
         # Update the accumulator
         tm.update(gt_ids, tr_ids, distances, frame)
-    tm.print_events()
+    #tm.print_events()
     summary = tm.compute(metrics=metrics, outfile=evaluation_file, printsum=True, df_gt=df_gt, df_pred=df_pred)
 
     tm.write_events(events_file)
