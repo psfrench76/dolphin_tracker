@@ -4,10 +4,10 @@
 #SBATCH -p dgx2,gpu
 #SBATCH -o /nfs/stak/users/frenchp/logs/jupyter/dolphin-server.out        # name of output file for batch script
 #SBATCH -e /nfs/stak/users/frenchp/logs/jupyter/dolphin-server.err        # name of error file for batch script
-#SBATCH -c 8             # number of cores per task
+#SBATCH -c 4             # number of cores per task. Should be #GPU * 4 at least.
 #SBATCH --time=7-00:00:00  # time needed for job
 #SBATCH --mem=32g        # memory needed for job
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:1
 #SBATCH --constraint=v100|a40|rtx8000|h100
 
 # gather basic information, can be useful for troubleshooting
