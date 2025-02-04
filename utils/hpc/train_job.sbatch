@@ -4,7 +4,7 @@
 #SBATCH -p dgx2,gpu
 #SBATCH --output=/nfs/stak/users/frenchp/logs/slurm/train_%j.out
 #SBATCH --error=/nfs/stak/users/frenchp/logs/slurm/train_%j.err
-#SBATCH -c 8             # number of cores per task
+#SBATCH -c 2             # number of cores per task
 #SBATCH --time=7-00:00:00  # time needed for job
 #SBATCH --mem=32g        # memory needed for job
 #SBATCH --gres=gpu:1
