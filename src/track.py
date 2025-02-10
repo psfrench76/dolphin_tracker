@@ -9,6 +9,7 @@ import torch
 from tracking_metrics import TrackingMetrics
 import yaml
 import cv2
+import math
 
 
 @click.command()
@@ -132,6 +133,7 @@ def save_ground_truth(gt_file_path, label_directory):
         with open(filepath, 'r') as infile:
             content = infile.read()
             next_id = 1
+            empty_frame = True
             for line in content.split("\n"):
                 if line.strip():
                     # Add frame number as the first element
@@ -141,10 +143,13 @@ def save_ground_truth(gt_file_path, label_directory):
                         line_data[0] = str(next_id)
                         next_id += 1
                     data.append([frame_id] + line_data)
+                    empty_frame = False
+            if empty_frame:
+                data.append([frame_id, None, None, None, None, None])
 
     # Convert list to DataFrame
     gt_data = pd.DataFrame(data, columns=['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max'])
-    gt_data = gt_data.astype({'frame': int, 'id': int, 'x_min': float, 'y_min': float, 'x_max': float, 'y_max': float})
+    gt_data = gt_data.astype({'frame': int, 'id': 'Int64', 'x_min': float, 'y_min': float, 'x_max': float, 'y_max': float})
 
     gt_data['mot15col1'] = -1
     gt_data['mot15col2'] = -1
@@ -152,9 +157,9 @@ def save_ground_truth(gt_file_path, label_directory):
     gt_data.to_csv(gt_file_path, index=False, header=False)
 
 
-def calculate_iou_shapely(box_1, box2):
+def calculate_iou_shapely(box1, box2):
     from shapely.geometry import box
-    poly1 = box(*box_1)
+    poly1 = box(*box1)
     poly2 = box(*box2)
     intersection = poly1.intersection(poly2).area
     union = poly1.union(poly2).area
@@ -176,6 +181,8 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
         g = df_gt.loc[frame]
         t = df_pred.loc[frame]
 
+        g.dropna(inplace=True)
+
         gt_ids = g.index.get_level_values('Id').values
         tr_ids = t.index.get_level_values('Id').values
 
@@ -183,7 +190,6 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
 
         #gt_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in g.iterrows()]
         #tr_boxes = [(row['X'], row['Y'], row['Width'], row['Height']) for index, row in t.iterrows()]
-
 
         gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in g.iterrows()]
         tr_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in t.iterrows()]
