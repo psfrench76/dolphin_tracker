@@ -25,7 +25,7 @@ def find_max_dolphins_per_frame(directory):
 
             # Iterate over shapes and find group_ids for "Dolphin" shapes
             for shape in data.get('shapes', []):
-                if shape.get('label') == 'Dolphin':
+                if shape.get('label') in ["Dolphin", "dolphin", "box", "rectangle"]:
                     dolphin_group_ids.add(shape.get('group_id'))
 
             # Update the maximum number of dolphins found in a single frame

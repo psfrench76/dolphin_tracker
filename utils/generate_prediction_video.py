@@ -59,14 +59,15 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     track_colors = {}
 
     # Regex pattern to extract frame number and base name
-    pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
+    #pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
+    pattern = r"(\d+)(?=[._](jpg|png|jpeg))"
 
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames"):
 
         match = re.search(pattern, image_file)
         if match:
-            frame_number = int(match.group(2))
+            frame_number = int(match.group(1))
         else:
             click.echo(f"Could not parse frame number from file: {image_file}")
             continue

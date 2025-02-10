@@ -77,7 +77,9 @@ def save_tracker_results(images_directory, file_path, results, researcher_outpat
     files.sort()
     pattern = r"(\d+)(?=[._](jpg))"
 
-    img_height, img_width = cv2.imread(os.path.join(images_directory, files[0])).shape[:2]
+    first_image_path = os.path.join(images_directory, files[0])
+
+    img_height, img_width = cv2.imread(first_image_path).shape[:2]
 
     with open(file_path, 'w') as f:
         if researcher_outpath:

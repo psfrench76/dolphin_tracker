@@ -3,7 +3,7 @@ import json
 import click
 
 # Configurable global variable to determine which class to convert
-CONVERT_CLASS = "Dolphin"
+CONVERT_CLASS = ["Dolphin", "dolphin", "box", "rectangle"]
 
 """
 This script converts a folder full of .json files, in the format output by labelme, into yolov8 format label files.
@@ -42,12 +42,12 @@ def convert_labelme_to_yolo(input_dir, output_dir):
 
         with open(output_path, 'w') as out_file:
             for shape in data['shapes']:
-                if shape['label'] != CONVERT_CLASS:
+                if shape['label'] not in CONVERT_CLASS:
                     continue
 
                 # Extract points
                 points = shape['points']
-                group_id = shape['group_id']
+                group_id = shape['group_id'] or 0
 
                 if len(points) != 4:
                     continue
