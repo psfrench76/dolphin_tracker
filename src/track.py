@@ -78,6 +78,9 @@ def save_tracker_results(images_directory, file_path, results, researcher_outpat
     pattern = r"(\d+)(?=[._](jpg))"
 
     first_image_path = os.path.join(images_directory, files[0])
+    first_image = cv2.imread(first_image_path)
+    if first_image is None:
+        raise ValueError(f"Could not read image file {first_image_path}")
 
     img_height, img_width = cv2.imread(first_image_path).shape[:2]
 
@@ -121,7 +124,7 @@ def save_ground_truth(gt_file_path, label_directory):
         pattern = r"(\d+)(?=[._](jpg|txt|json))"
         match = re.search(pattern, filename)
         if not match:
-            raise f"Could not process filename {label_directory}/{filename}"
+            raise ValueError(f"Could not process filename {label_directory}/{filename}")
 
         frame_id = match.group(1)
 

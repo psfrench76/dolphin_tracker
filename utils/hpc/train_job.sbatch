@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=train_job
 #SBATCH -A eecs
-#SBATCH -p dgx2,gpu
+#SBATCH -p dgx2,gpu,dgxh
 #SBATCH --output=/nfs/stak/users/frenchp/logs/slurm/train_%j.out
 #SBATCH --error=/nfs/stak/users/frenchp/logs/slurm/train_%j.err
 #SBATCH -c 4             # number of cores per task
-#SBATCH --time=7-00:00:00  # time needed for job
+#SBATCH --time=1-00:00:00  # time needed for job
 #SBATCH --mem=32g        # memory needed for job
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=v100|a40|rtx8000|h100
