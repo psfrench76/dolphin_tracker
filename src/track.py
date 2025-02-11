@@ -58,8 +58,44 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
     if botsort:
         tracker = settings['ultralytics_botsort']
 
-    results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device=device,
-                                   persist=(not nopersist))
+    files = [os.path.join(images_directory, f) for f in os.listdir(images_directory) if f.endswith('.jpg')]
+    files.sort()
+
+    # results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device=device,
+    #                                persist=(not nopersist))
+    results = []
+    pattern = r"(.*?)_?(\d+)(?=[._](jpg))"
+    prefix = None
+    frame = None
+    empty_frames = 0
+    for file in files:
+        if prefix is None:
+            match = re.search(pattern, file)
+            if match:
+                prefix = match.group(1)
+                frame = int(match.group(2)) - 1
+
+        match = re.search(pattern, file)
+        frame += 1
+
+        if match.group(1) != prefix or int(match.group(2)) != frame:
+            prefix = match.group(1)
+            frame = int(match.group(2))
+            model_instance.predictor.trackers[0].reset()
+            print(f"Resetting tracker at frame {frame}")
+
+        result = model_instance.track(source=file, tracker=tracker, stream=False, device=device,
+                                       persist=(not nopersist))
+        objects = len(result[0].boxes)
+        if objects == 0:
+            empty_frames += 1
+            if empty_frames == settings['tracker_empty_frames_reset']:
+                print(f"{empty_frames} empty frames detected at {frame}. Resetting tracker.")
+                model_instance.predictor.trackers[0].reset()
+        else:
+            empty_frames = 0
+
+        results.extend(result)
 
     save_tracker_results(images_directory, results_file_path, results, researcher_outpath=researcher_output_path)
     if os.path.exists(label_directory):

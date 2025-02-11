@@ -5,6 +5,9 @@ amp_check_models_dir: '../saves/pretrained'
 pretrained_models_dir: '../saves/pretrained'
 hyp_config_dir: 'cfg/hyp'
 
+# Custom settings
+tracker_empty_frames_reset: 25
+
 # Tracking results files
 gt_file_suffix: 'gt_formatted.txt'
 results_file_suffix: 'results.txt'
