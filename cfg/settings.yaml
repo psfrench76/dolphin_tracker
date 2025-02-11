@@ -15,8 +15,8 @@ metrics_file_suffix: 'mot_evaluation.csv'
 metrics_events_suffix: 'mot_events.csv'
 researcher_output_suffix: 'output.csv'
 
-ultralytics_bytetrack: 'bytetrack.yaml'
-ultralytics_botsort: 'botsort.yaml'
+ultralytics_bytetrack: 'dolphin_tracker/cfg/trackers/bytetrack_default.yaml'
+ultralytics_botsort: 'dolphin_tracker/cfg/trackers/botsort_default.yaml'
 
 tracking_metrics:
   - mota

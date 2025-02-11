@@ -18,7 +18,8 @@ import math
 @click.option('--output', required=True, help="Path to the output directory.")
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
-def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
+@click.option('--tracker', help="Tracker config file")
+def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist, tracker):
     print(f"Loading configuration files...")
     config = 'dolphin_tracker/cfg/settings.yaml'
 
@@ -54,7 +55,7 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist):
     researcher_output_path = os.path.join(output, f'{run_name}_{settings["researcher_output_suffix"]}')
 
     # Run tracking
-    tracker = settings['ultralytics_bytetrack']
+    tracker = tracker or settings['ultralytics_bytetrack']
     if botsort:
         tracker = settings['ultralytics_botsort']
 
