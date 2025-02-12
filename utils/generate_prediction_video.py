@@ -84,10 +84,14 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
         # Draw bounding boxes and labels
         for _, row in frame_bboxes.iterrows():
             # Convert normalized coordinates to pixel coordinates for the resized frame
-            x = int(row['x'] * new_width)
-            y = int(row['y'] * new_height)
+            center_x = int(row['x'] * new_width)
+            center_y = int(row['y'] * new_height)
             w = int(row['w'] * new_width)
             h = int(row['h'] * new_height)
+
+            x = int(center_x - w / 2)
+            y = int(center_y - h / 2)
+
             track_id = row['id']
 
             # Assign a color to each track ID

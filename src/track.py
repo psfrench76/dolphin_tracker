@@ -138,14 +138,16 @@ def save_tracker_results(images_directory, file_path, results, researcher_outpat
                     point_a_x, point_a_y, point_b_x, point_b_y = bbox
                     width = point_b_x - point_a_x
                     height = point_b_y - point_a_y
+                    center_x = (point_a_x + point_b_x) / 2
+                    center_y = (point_a_y + point_b_y) / 2
                     f.write(
-                        f'{frame_id},{track_id},{point_a_x},{point_a_y},{width},{height},-1,-1,{conf}\n')
+                        f'{frame_id},{track_id},{center_x},{center_y},{width},{height},-1,-1,{conf}\n')
                     if rf:
                         rf.write(
                             f'{frame_id},{track_id},{point_a_x * img_width},{point_a_y * img_height},'
                             f'{point_b_x * img_width},{point_b_y * img_height},'
                             f'{width * img_width},{height * img_height},'
-                            f'{(point_a_x + point_b_x) * img_width / 2},{(point_a_y + point_b_y) * img_height / 2}\n')
+                            f'{center_x * img_width},{center_y * img_height}\n')
 
         if rf:
             rf.close()
