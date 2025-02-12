@@ -16,7 +16,7 @@ def create_blank_labels(image_folder, label_folder):
     skipped_count = 0
 
     # Iterate over .jpg files in the image folder
-    for filename in os.listdir(image_folder):
+    for filename in sorted(os.listdir(image_folder)):
         if filename.endswith('.jpg'):
             base_name = os.path.splitext(filename)[0]
             label_file = os.path.join(label_folder, f"{base_name}.txt")
