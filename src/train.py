@@ -22,7 +22,25 @@ def train_detector(data_name, run_name, hyp_path, weights_path):
     with open(config, 'r') as file:
         settings = yaml.safe_load(file)
 
+    with open(hyp_path, 'r') as file:
+        hyp = yaml.safe_load(file)
+
     data_config = os.path.join(settings['data_config_dir'], data_name) + '.yaml'
+
+    with open(data_config, 'r') as file:
+        data_settings = yaml.safe_load(file)
+
+    data_path = data_settings['path'].replace('../', '', 1)
+
+    label_folders = [os.path.join(data_path, data_settings[split].replace('images', 'labels')) for split in
+                     ['train', 'val']]
+    new_label_folders = [os.path.join(data_path, data_settings[split].replace('images', 'original_labels'))
+                         for split in ['train', 'val']]
+
+    print("Processing labels...")
+
+    for label_folder, new_label_folder in zip(label_folders, new_label_folders):
+        process_labels(label_folder, new_label_folder)
 
     project = os.path.join(settings['runs_dir'], phase, 'stage1')
 
@@ -56,7 +74,8 @@ def train_detector(data_name, run_name, hyp_path, weights_path):
     now = timeit.default_timer()
     print(f"Training model {run_name} on data {data_name}")
     results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                            cfg=hyp_path, device=device)
+                           cfg=hyp_path, device=device)
+
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
     # Check for downloaded .pt files and move them out of the current directory
@@ -66,6 +85,52 @@ def train_detector(data_name, run_name, hyp_path, weights_path):
             new_path = os.path.join(amp_check_models_dir, pt_file)
             shutil.move(pt_file, new_path)
             os.symlink(new_path, pt_file)
+
+def process_labels(label_folder, new_label_folder):
+    """
+    Move label files with class IDs other than 0 to a new folder and save a copy with class ID 0 in the original folder.
+    """
+    if not os.path.exists(new_label_folder):
+        os.makedirs(new_label_folder)
+
+    for root, _, files in os.walk(label_folder):
+        for file in files:
+            if file.endswith('.txt'):
+                label_file_path = str(os.path.join(root, file))
+                new_label_file_path = str(os.path.join(new_label_folder, file))
+                with open(label_file_path, 'r') as f:
+                    lines = f.readlines()
+
+                move_file = True
+                new_lines = []
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) > 0:
+                        if parts[0] != '0':
+                            parts[0] = '0'
+
+                        if float(parts[1]) < 0:
+                            x_start = float(parts[1])
+                            x_width = float(parts[3])
+                            x_width += x_start
+                            parts[3] = str(x_width)
+                            parts[1] = '0'
+
+                        if float(parts[2]) < 0:
+                            y_start = float(parts[2])
+                            y_height = float(parts[4])
+                            y_height += y_start
+                            parts[4] = str(y_height)
+                            parts[2] = '0'
+
+                    new_line = ' '.join(parts) + '\n'
+                    if len(new_lines) == 0 or new_line != new_lines[-1]:
+                        new_lines.append(new_line)
+
+                if move_file:
+                    shutil.move(label_file_path, new_label_file_path)
+                    with open(label_file_path, 'w') as f:
+                        f.writelines(new_lines)
 
 if __name__ == '__main__':
     train_detector()

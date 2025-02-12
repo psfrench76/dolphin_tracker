@@ -62,15 +62,15 @@ def convert_labelme_to_yolo(input_dir, output_dir):
                 y_max = max(y_coords)
 
                 # Normalize coordinates
-                #x_center = (x_min + x_max) / 2 / image_width
-                #y_center = (y_min + y_max) / 2 / image_height
+                x_center = (x_min + x_max) / 2 / image_width
+                y_center = (y_min + y_max) / 2 / image_height
                 x_point = x_min / image_width
                 y_point = y_min / image_height
                 width = (x_max - x_min) / image_width
                 height = (y_max - y_min) / image_height
 
                 # Write to output
-                out_file.write(f"{group_id} {x_point} {y_point} {width} {height}\n")
+                out_file.write(f"{group_id} {x_center} {y_center} {width} {height}\n")
 
         # Basic progress report with carriage return
         print(f"Converted {i}/{len(files)}: {file_name}\r", end='')
