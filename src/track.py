@@ -59,11 +59,19 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist, trac
     if botsort:
         tracker = settings['ultralytics_botsort']
 
+    with open(tracker, 'r') as file:
+        tracker_settings = yaml.safe_load(file)
+
+    if 'iou' in tracker_settings:
+        iou = tracker_settings['iou']
+    else:
+        iou = 0.7
+
     files = [os.path.join(images_directory, f) for f in os.listdir(images_directory) if f.endswith('.jpg')]
     files.sort()
 
     results = model_instance.track(source=images_directory, tracker=tracker, stream=True, device=device,
-                                   persist=(not nopersist))
+                                   persist=(not nopersist), iou=iou)
     # results = []
     # pattern = r"(.*?)_?(\d+)(?=[._](jpg))"
     # prefix = None
