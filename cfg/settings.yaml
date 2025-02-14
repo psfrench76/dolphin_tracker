@@ -27,11 +27,11 @@ tracking_metrics:
   - num_misses
   - num_switches
   - num_fragmentations
+  - num_matches
   - num_frames
   - idfp
   - idfn
   - idtp
-  - num_matches
   - mostly_tracked
   - partially_tracked
   - mostly_lost
