@@ -4,6 +4,7 @@ import os
 import re
 import pandas as pd
 from tqdm import tqdm
+import numpy as np
 
 """
 This script takes the original .jpg frames of a video and the output from dolphin_tracker (.txt file in MOT15 format),
@@ -84,6 +85,9 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
         # Draw bounding boxes and labels
         for _, row in frame_bboxes.iterrows():
             # Convert normalized coordinates to pixel coordinates for the resized frame
+            if np.isnan(row['id']):
+                continue
+
             center_x = int(row['x'] * new_width)
             center_y = int(row['y'] * new_height)
             w = int(row['w'] * new_width)

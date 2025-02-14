@@ -2,8 +2,8 @@
 #SBATCH --job-name=train_job
 #SBATCH -A eecs
 #SBATCH -p dgx2,gpu,dgxh
-#SBATCH --output=/nfs/stak/users/frenchp/logs/slurm/train_%j.out
-#SBATCH --error=/nfs/stak/users/frenchp/logs/slurm/train_%j.err
+#SBATCH --output=/nfs/hpc/share/frenchp/dolphin-tracker/logs/slurm/train_%j.out
+#SBATCH --error=/nfs/hpc/share/frenchp/dolphin-tracker/logs/slurm/train_%j.err
 #SBATCH -c 4             # number of cores per task
 #SBATCH --time=1-00:00:00  # time needed for job
 #SBATCH --mem=32g        # memory needed for job
@@ -28,6 +28,6 @@ conda env list
 python -V
 which python
 
-/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python src/train.py --data_name $DATA_NAME --run_name $RUN_NAME --hyp_path $HYP_PATH --weights_path $WEIGHTS_PATH > "/nfs/stak/users/frenchp/logs/slurm/train_$SLURM_JOBID.log"
+/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python src/train.py --data_name $DATA_NAME --run_name $RUN_NAME --hyp_path $HYP_PATH --weights_path $WEIGHTS_PATH > "/nfs/hpc/share/frenchp/dolphin-tracker/logs/results/train_$SLURM_JOBID.log"
 conda deactivate
 date
