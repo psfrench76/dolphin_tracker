@@ -13,7 +13,8 @@ def validate_args(data_name, run_name, hyp_path, weights_path):
 @click.option('--run_name', required=True, help='Name of the run. Expected: exp##/param-desc')
 @click.option('--hyp_path', required=True, help='Path to the hyperparameter configuration file.')
 @click.option('--weights_path', required=True, help='Path to the pretrained weights file.')
-def main(data_name, run_name, hyp_path, weights_path):
+@click.option('--checkpoint_reload', is_flag=True, help='If set, save every epoch and reload from the last checkpoint.')
+def main(data_name, run_name, hyp_path, weights_path, checkpoint_reload):
     validate_args(data_name, run_name, hyp_path, weights_path)
 
     # Set environment variables
@@ -22,9 +23,12 @@ def main(data_name, run_name, hyp_path, weights_path):
     os.environ['HYP_PATH'] = hyp_path
     os.environ['WEIGHTS_PATH'] = weights_path
 
-    # Call the SLURM batch script
-    subprocess.run(["sbatch", "utils/hpc/train_job.sbatch"])
-    print("Job submitted.")
+    if checkpoint_reload:
+        subprocess.run(["sbatch", "utils/hpc/train_preempt.sbatch"])
+        print("Job submitted to preempt partition.")
+    else:
+        subprocess.run(["sbatch", "utils/hpc/train_job.sbatch"])
+        print("Job submitted.")
 
 if __name__ == "__main__":
     main()

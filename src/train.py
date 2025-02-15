@@ -14,13 +14,47 @@ import timeit
 @click.option('--run_name', required=True, help='Name of the run. Expected: exp##/param-desc')
 @click.option('--hyp_path', required=True, help='Path to the hyperparameter configuration file.')
 @click.option('--weights_path', required=True, help='Path to the pretrained weights file.')
-def train_detector(data_name, run_name, hyp_path, weights_path):
+@click.option('--checkpoint_reload', is_flag=True, help='If set, save every epoch and reload from the last checkpoint.')
+def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reload):
     print(f"Loading configuration files...")
     config = 'cfg/settings.yaml'
     phase = 'train'
 
     with open(config, 'r') as file:
         settings = yaml.safe_load(file)
+
+    project = os.path.join(settings['runs_dir'], phase, 'stage1')
+    run_number = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    resume = False
+
+    #save_period = 1 if checkpoint_reload else -1
+    save_period = -1 # I think save_period is unnecessary for preemption, but here JIC. I think last.pt always saved.
+
+    if checkpoint_reload:
+        print("Checking for checkpoint file...")
+        run_dir = os.path.join(project, run_name)
+        checkpoint_file = os.path.join(run_dir, settings['checkpoint_file'])
+        if os.path.exists(checkpoint_file):
+            with open(checkpoint_file, 'r') as file:
+                checkpoint_settings = yaml.safe_load(file)
+                run_number = checkpoint_settings['run_number']
+                if run_number is None:
+                    raise ValueError(f"Checkpoint file {checkpoint_file} exists but does not contain a run number.")
+
+                resume = True
+                last_path = os.path.join(project, run_name, run_number, 'last.pt')
+                if os.path.exists(last_path):
+                    weights_path = os.path.join(project, run_name, run_number, 'last.pt')
+                else:
+                    print(f"Checkpoint file indicated {last_path}, but weights file not found. Starting training with {weights_path} instead.")
+                print(f"Loaded checkpoint file, resuming training under run number {run_number}")
+        else:
+            os.makedirs(run_dir, exist_ok=True)
+            with open(checkpoint_file, 'w') as file:
+                file.write(f'run_number: {run_number}\n')
+                print(f"Checkpoint file not found, starting fresh run with run number {run_number}")
+
+    name = f'{run_name}/{run_number}'
 
     with open(hyp_path, 'r') as file:
         hyp = yaml.safe_load(file)
@@ -41,11 +75,6 @@ def train_detector(data_name, run_name, hyp_path, weights_path):
 
     for label_folder, new_label_folder in zip(label_folders, new_label_folders):
         process_labels(label_folder, new_label_folder)
-
-    project = os.path.join(settings['runs_dir'], phase, 'stage1')
-
-    run_number = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    name = f'{run_name}/{run_number}'
 
     # Detect the number of available CPU cores
     num_cores = len(psutil.Process().cpu_affinity())
@@ -74,7 +103,8 @@ def train_detector(data_name, run_name, hyp_path, weights_path):
     now = timeit.default_timer()
     print(f"Training model {run_name} on data {data_name}")
     results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                           cfg=hyp_path, device=device)
+                          cfg=hyp_path, device=device, save_period=save_period, resume=resume,
+                          exist_ok=resume)
 
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
