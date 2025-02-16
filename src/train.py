@@ -8,6 +8,7 @@ import glob
 import shutil
 import psutil
 import timeit
+import time
 
 @click.command()
 @click.option('--data_name', required=True, help='Name of the data configuration file.')
@@ -41,17 +42,17 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
                 if run_number is None:
                     raise ValueError(f"Checkpoint file {checkpoint_file} exists but does not contain a run number.")
 
-                resume = True
-                last_path = os.path.join(project, run_name, run_number, 'last.pt')
+                last_path = os.path.join(project, run_name, run_number, 'weights', 'last.pt')
                 if os.path.exists(last_path):
-                    weights_path = os.path.join(project, run_name, run_number, 'last.pt')
+                    weights_path = last_path
+                    resume = True
                 else:
                     print(f"Checkpoint file indicated {last_path}, but weights file not found. Starting training with {weights_path} instead.")
                 print(f"Loaded checkpoint file, resuming training under run number {run_number}")
         else:
             os.makedirs(run_dir, exist_ok=True)
             with open(checkpoint_file, 'w') as file:
-                file.write(f'run_number: {run_number}\n')
+                file.write(f"run_number: '{run_number}'\n")
                 print(f"Checkpoint file not found, starting fresh run with run number {run_number}")
 
     name = f'{run_name}/{run_number}'
@@ -100,11 +101,24 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     print(f"Loading pretrained weights from {weights_path}")
     model = YOLO(weights_path)
 
+    if resume:
+        #Clear cache because it doesn't like reloading it here
+        model.data = None
+
     now = timeit.default_timer()
     print(f"Training model {run_name} on data {data_name}")
-    results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                          cfg=hyp_path, device=device, save_period=save_period, resume=resume,
-                          exist_ok=resume)
+    for attempts in range(1, 4):
+        try:
+            results = model.train(data=data_config, project=project, name=name, workers=num_workers,
+                                  cfg=hyp_path, device=device, save_period=save_period, resume=resume,
+                                  exist_ok=resume)
+            break
+        except FileNotFoundError as e:
+            if attempts >= 3:
+                raise FileNotFoundError(f"Error '{e}' training model {run_name} on data {data_name} after 3 attempts.")
+            else:
+                print(f"Error training model {run_name} on data {data_name}, retrying in 5 seconds...")
+                time.sleep(5)
 
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
@@ -128,8 +142,17 @@ def process_labels(label_folder, new_label_folder):
             if file.endswith('.txt'):
                 label_file_path = str(os.path.join(root, file))
                 new_label_file_path = str(os.path.join(new_label_folder, file))
-                with open(label_file_path, 'r') as f:
-                    lines = f.readlines()
+                for i in range(1,4):
+                    try:
+                        with open(label_file_path, 'r') as f:
+                            lines = f.readlines()
+                        break
+                    except FileNotFoundError:
+                        if i >= 3:
+                            raise FileNotFoundError(f"Error reading {label_file_path} after 3 attempts.")
+                        else:
+                            print(f"Error reading {label_file_path}, retrying in 5 seconds...")
+                            time.sleep(5)
 
                 move_file = True
                 new_lines = []
