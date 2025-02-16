@@ -1,0 +1,108 @@
+# Trainer settings
+task: 'detect'
+optimizer: AdamW
+epochs: 75
+
+# Model Hyperparameters
+imgsz: 640
+batch: 16
+single_cls: True
+
+# Data Augmentation Hyperparameters
+degrees: 55
+hsv_h: 0.25
+flipud: 0.0
+erasing: 0.4
+
+# Optimzer Hyperparameters
+lr0: 0.0001
+lrf: 0.01
+weight_decay: 0.0005
+momentum: 0.937
+dropout: 0.0
+box: 7.5
+cls: 0.5
+dfl: 1.5
+
+# Everything here should be the same as the default values in the ultralytics module; just here for explicitness.
+# I've left out options which are defined elsewhere in this code. (Nones are commented out as invalid floats)
+#time: None
+#save_period: -1
+#resume: False
+#exist_ok: False
+patience: 100
+save: True
+cache: False
+pretrained: True
+verbose: True
+seed: 0
+deterministic: True
+rect: False
+cos_lr: False
+close_mosaic: 10
+amp: True
+fraction: 1.0
+profile: False
+#freeze: None
+multi_scale: False
+overlap_mask: True
+mask_ratio: 4
+val: True
+split: val
+save_json: False
+save_hybrid: False
+#conf: None
+iou: 0.7
+max_det: 300
+half: False
+dnn: False
+plots: True
+#source: None
+vid_stride: 1
+stream_buffer: False
+visualize: False
+augment: False
+agnostic_nms: False
+#classes: None
+retina_masks: False
+#embed: None
+show: False
+save_frames: False
+save_txt: False
+save_conf: False
+save_crop: False
+show_labels: True
+show_conf: True
+show_boxes: True
+#line_width: None
+format: torchscript
+keras: False
+optimize: False
+int8: False
+dynamic: False
+simplify: True
+#opset: None
+#workspace: None
+nms: False
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+pose: 12.0
+kobj: 1.0
+nbs: 64
+hsv_s: 0.7
+hsv_v: 0.4
+translate: 0.1
+scale: 0.5
+shear: 0.0
+perspective: 0.0
+
+fliplr: 0.5
+bgr: 0.0
+mosaic: 1.0
+mixup: 0.0
+copy_paste: 0.0
+copy_paste_mode: flip
+auto_augment: randaugment
+crop_fraction: 1.0
