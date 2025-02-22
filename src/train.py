@@ -111,7 +111,7 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
         try:
             results = model.train(data=data_config, project=project, name=name, workers=num_workers,
                                   cfg=hyp_path, device=device, save_period=save_period, resume=resume,
-                                  exist_ok=resume)
+                                  exist_ok=True)
             break
         except FileNotFoundError as e:
             if attempts >= 3:
