@@ -27,7 +27,7 @@ def main(dataset, model, output, botsort, nopersist, tracker):
     os.environ['OUTPUT'] = output
     os.environ['NOPERSIST'] = "--nopersist" if nopersist else ""
     os.environ['BOTSORT'] = "--botsort" if botsort else ""
-    os.environ['TRACKER'] = tracker
+    os.environ['TRACKER'] = tracker if tracker else "Default"
 
     subprocess.run(["sbatch", "dolphin_tracker/utils/hpc/track_job.sbatch"])
     print("Job submitted.")
