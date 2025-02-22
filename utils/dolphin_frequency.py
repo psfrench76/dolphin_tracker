@@ -4,7 +4,7 @@ import sys
 from collections import defaultdict
 
 """
-This script takes an input directory of .json files (from the labelme converted format) and returns the number of frames
+This script takes an input directory of .json or .txt files (from the labelme converted format or other formats) and returns the number of frames
 with each number of dolphins, similar to a histogram.
 """
 
@@ -14,9 +14,9 @@ def count_dolphins_per_frame(directory):
     # Iterate over all files in the directory
     for root, _, files in os.walk(directory):
         for filename in files:
-            if filename.endswith('.json'):
-                file_path = os.path.join(root, filename)
+            file_path = os.path.join(root, filename)
 
+            if filename.endswith('.json'):
                 # Open and load the JSON file
                 with open(file_path, 'r') as file:
                     data = json.load(file)
@@ -33,12 +33,24 @@ def count_dolphins_per_frame(directory):
                 num_dolphins = len(dolphin_group_ids)
                 dolphin_counts[num_dolphins] += 1
 
+            elif filename.endswith('.txt'):
+                # Open and read the TXT file
+                with open(file_path, 'r') as file:
+                    lines = file.readlines()
+
+                # Use a set to track unique lines
+                unique_lines = set(line.strip() for line in lines if line.strip())
+
+                # Count the number of unique lines (dolphins) in the current frame
+                num_dolphins = len(unique_lines)
+                dolphin_counts[num_dolphins] += 1
+
     return dolphin_counts
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        print("Usage: python script.py <input_directory>")
+        print("Usage: python dolphin_frequency.py <input_directory>")
         sys.exit(1)
 
     input_directory = sys.argv[1]
