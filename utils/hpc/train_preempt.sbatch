@@ -15,6 +15,10 @@
 hostname
 echo $SLURM_JOBID
 showjob $SLURM_JOBID
+echo "run_name = $RUN_NAME"
+echo "data_name = $RUN_NAME"
+echo "hyp_path = $HYP_PATH"
+echo "weights_path = $WEIGHTS_PATH"
 
 # load modules needed for job
 module load anaconda

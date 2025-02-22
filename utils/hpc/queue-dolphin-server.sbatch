@@ -27,12 +27,12 @@ conda activate dolphin-v2
 # run my job
 echo "Loading tensorboard from:"
 which tensorboard
-tensorboard --port=6999 --logdir=/nfs/stak/users/frenchp/AI506/dolphin_tracker/runs/ &
+~/hpc-share/.conda/envs/dolphin-v2/bin/tensorboard --port=6999 --logdir=/nfs/stak/users/frenchp/AI506/dolphin_tracker/runs/ &
 
 # run my job
 echo "Loading jupyter from:"
 which jupyter
-jupyter notebook --no-browser --port=8080 --notebook-dir=/nfs/stak/users/frenchp/AI506/dolphin_tracker
+~/hpc-share/.conda/envs/dolphin-v2/bin/jupyter notebook --no-browser --port=8080 --notebook-dir=/nfs/stak/users/frenchp/AI506/dolphin_tracker
 
 conda deactivate
 date
