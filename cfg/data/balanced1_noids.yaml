@@ -1,0 +1,7 @@
+path: '../../data/balanced1_noids'
+train: 'train/images'
+val: 'valid/images'
+test: 'test/images'
+
+nc: 1
+names: ['dolphin']
