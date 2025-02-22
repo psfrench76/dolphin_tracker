@@ -56,6 +56,8 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist, trac
 
     # Run tracking
     tracker = tracker or settings['ultralytics_bytetrack']
+    if tracker == "Default":
+        tracker = settings['ultralytics_bytetrack']
     if botsort:
         tracker = settings['ultralytics_botsort']
 
