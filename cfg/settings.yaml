@@ -6,6 +6,7 @@ pretrained_models_dir: '../saves/pretrained'
 hyp_config_dir: 'cfg/hyp'
 tracker_config_dir: 'dolphin_tracker/cfg/trackers'
 checkpoint_file: 'checkpoint.yaml'
+output_dir: '../output'
 
 # Custom settings
 tracker_empty_frames_reset: 25
@@ -37,3 +38,10 @@ tracking_metrics:
   - mostly_tracked
   - partially_tracked
   - mostly_lost
+
+# Defaults for track_from_video.py
+default_detector: '../saves/pretrained/e31_detector.pt'
+default_tracker: 'cfg/trackers/tuning/exp31/165-bal1_long_best2_firstrun.yaml'
+
+# Filenames for track_from_video.py
+args_file: 'args.yaml'
