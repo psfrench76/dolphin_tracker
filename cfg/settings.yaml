@@ -7,6 +7,16 @@ hyp_config_dir: 'cfg/hyp'
 tracker_config_dir: 'dolphin_tracker/cfg/trackers'
 checkpoint_file: 'checkpoint.yaml'
 output_dir: '../output'
+dataset_dir: '../data'
+extracted_frames_dir: 'extracted' # Subdirectory of dataset_dir
+tracker_output_dir: 'tracker' # Subdirectory of output_dir
+images_dir: 'images' # Subdirectory of all dataset directories
+labels_dir: 'labels' # Subdirectory of all dataset directories
+dataset_split_dirs: # Subdirectories of some datasets -- only used for searching and not for saving
+  - 'train'
+  - 'val'
+  - 'valid'
+  - 'test'
 
 # Custom settings
 tracker_empty_frames_reset: 25
@@ -17,6 +27,8 @@ results_file_suffix: 'results.txt'
 metrics_file_suffix: 'mot_evaluation.csv'
 metrics_events_suffix: 'mot_events.csv'
 researcher_output_suffix: 'output.csv'
+prediction_video_suffix: 'predictions.mp4'
+gt_video_suffix: 'gt.mp4'
 
 ultralytics_bytetrack: 'dolphin_tracker/cfg/trackers/bytetrack_default.yaml'
 ultralytics_botsort: 'dolphin_tracker/cfg/trackers/botsort_default.yaml'
@@ -42,6 +54,7 @@ tracking_metrics:
 # Defaults for track_from_video.py
 default_detector: '../saves/pretrained/e31_detector.pt'
 default_tracker: 'cfg/trackers/tuning/exp31/165-bal1_long_best2_firstrun.yaml'
+default_video_resize_ratio: 0.25
 
 # Filenames for track_from_video.py
 args_file: 'args.yaml'

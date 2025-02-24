@@ -5,6 +5,9 @@ import os
 @click.command()
 @click.argument('input_video', type=click.Path(exists=True))
 @click.argument('output_folder', type=click.Path())
+def main(input_video, output_folder):
+    extract_frames(input_video, output_folder)
+
 def extract_frames(input_video, output_folder):
     """
     Extract frames from INPUT_VIDEO and save them as jpg files in OUTPUT_FOLDER.
@@ -30,4 +33,4 @@ def extract_frames(input_video, output_folder):
     click.echo(f"Frames extracted from {input_video} into {output_folder}.")
 
 if __name__ == '__main__':
-    extract_frames()
+    main()

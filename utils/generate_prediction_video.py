@@ -5,6 +5,7 @@ import re
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
+import yaml
 
 """
 This script takes the original .jpg frames of a video and the output from dolphin_tracker (.txt file in MOT15 format),
@@ -20,7 +21,13 @@ to improve file transfer time).
 @click.option('--output_folder', required=True, help="Path to the output folder for the video file.")
 @click.option('--resize_ratio', default=1.0, type=float, help="Ratio by which to resize the frames (e.g., 0.5 for half size).")
 @click.option('--gt', is_flag=True, help="Label as ground truth video")
+def main(image_folder, bbox_file, output_folder, resize_ratio, gt):
+    generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt)
+
 def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
+    with open('cfg/settings.yaml') as f:
+        settings = yaml.safe_load(f)
+
     # Read the bounding box file
     bboxes = pd.read_csv(bbox_file, header=None)
     bboxes.columns = ['frame', 'id', 'x', 'y', 'w', 'h', 'score', 'class', 'visibility']
@@ -34,9 +41,9 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     run_name = os.path.basename(os.path.normpath(output_folder))
 
     if gt:
-        output_video_path = os.path.join(output_folder, f"{run_name}_gt.mp4")
+        output_video_path = os.path.join(output_folder, f"{run_name}_{settings['gt_video_suffix']}")
     else:
-        output_video_path = os.path.join(output_folder, f"{run_name}_predictions.mp4")
+        output_video_path = os.path.join(output_folder, f"{run_name}_{settings['prediction_video_suffix']}")
 
     # Initialize video writer
     first_image_path = os.path.join(image_folder, image_files[0])
@@ -118,4 +125,4 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
 
 
 if __name__ == '__main__':
-    generate_video()
+    main()

@@ -284,7 +284,7 @@ class GeneticAlgorithm:
             self.save_generation()
 
         self.evaluate_population()
-        
+
         best_tracker = max(self.population, key=lambda x: self.trackers[x].fitness)
         return self.trackers[best_tracker]
 
