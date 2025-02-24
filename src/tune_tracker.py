@@ -35,18 +35,23 @@ class Tracker:
         else:
             raise ValueError("Config must be a string or a dictionary")
 
-        self.hyp = {
-            'track_high_thresh': cfg['track_high_thresh'],
-            'track_low_thresh': cfg['track_low_thresh'],
-            'new_track_thresh': cfg['new_track_thresh'],
-            'track_buffer': cfg['track_buffer'],
-            'match_thresh': cfg['match_thresh'],
-            'iou': cfg['iou']
-        }
-        self.fixed = {
-            'fuse_score': cfg['fuse_score'],
-            'tracker_type': cfg['tracker_type']
-        }
+        self.mins = {}
+        self.maxs = {}
+
+        with open('dolphin_tracker/cfg/tracking_hyperparameters.yaml', 'r') as file:
+            hyp_cfg_dict = yaml.safe_load(file)
+            hyp_dict = {}
+            fixed_dict = {}
+            for key, (min_val, max_val) in hyp_cfg_dict['hyp'].items():
+                hyp_dict[key] = cfg[key]
+                self.mins[key] = min_val
+                self.maxs[key] = max_val
+
+            for key in hyp_cfg_dict['fixed']:
+                fixed_dict[key] = (cfg[key])
+
+        self.hyp = hyp_dict
+        self.fixed = fixed_dict
         self.distribution = distribution
         self.model = model
         self.dataset = dataset
@@ -78,10 +83,11 @@ class Tracker:
                     raise ValueError(f"Unsupported distribution type: {self.distribution}")
 
                 if isinstance(value, float):
-                    self.hyp[key] = value + mutation
+                    new_value = max(min(value + mutation, self.maxs[key]), self.mins[key])
+                    self.hyp[key] = new_value
                     self.mutated_params[key] = self.hyp[key]
                 elif isinstance(value, int):
-                    new_value = int(value + mutation)
+                    new_value = int(max(min(value + mutation, self.maxs[key]), self.mins[key]))
                     if new_value != value:
                         self.hyp[key] = new_value
                         self.mutated_params[key] = self.hyp[key]
@@ -211,8 +217,6 @@ class GeneticAlgorithm:
         potential_parents.remove(parent)
         return parent
 
-# TODO:
-#   add valid ranges for hyps (config file?)
     def select_parents(self):
         print(f"Selecting parents for generation {self.generation_number}")
         selected_parents = set()
@@ -288,7 +292,8 @@ class GeneticAlgorithm:
                 'parents': []
             }
             if generation_number in self.population_probabilities:
-                generation_details['population_probabilities'] = {tracker_id: prob for tracker_id, prob in self.population_probabilities[generation_number]}
+                generation_details['population_probabilities'] = {tracker_id: prob for tracker_id, prob in
+                                                                  self.population_probabilities[generation_number]}
 
             for tracker_id in generation:
                 tracker = self.trackers[tracker_id]
@@ -312,7 +317,6 @@ class GeneticAlgorithm:
         evolutions_file = os.path.join(self.output, 'evolutions.yaml')
         with open(evolutions_file, 'w') as f:
             yaml.dump(population_history, f)
-
 
 
 def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, generations, mutation_rate,
@@ -348,6 +352,7 @@ def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, 
     print(f"\nOriginal best tracker configuration saved to: {original_tracker_file}")
     print(f"Best tracker configuration saved to: {best_tracker_file}")
     print(f"Evolutions details saved to: {os.path.join(output, 'evolutions.yaml')}")
+
 
 if __name__ == '__main__':
     main()

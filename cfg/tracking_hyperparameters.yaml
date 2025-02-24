@@ -1,0 +1,13 @@
+# This file describes the hyperparameters and their valid ranges for the sake of tuning.
+hyp:
+  track_high_thresh: [0.0, 1.0]
+  track_low_thresh: [0.0, 1.0]
+  new_track_thresh: [0.0, 1.0]
+  track_buffer: [0, 10000]
+  match_thresh: [0.0, 1.0]
+  iou: [0.0, 1.0]
+
+# Fixed hyperparameters will not be tuned, but will be directly inherited from the baseline config.
+fixed:
+- fuse_score
+- tracker_type
