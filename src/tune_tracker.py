@@ -7,6 +7,7 @@ import random
 import os
 import math
 
+
 # TODO: Intermediate logging every generation
 
 @click.command()
@@ -177,14 +178,10 @@ class GeneticAlgorithm:
         print(f"\n-------------------------------------------\n"
               f"Evaluating Generation {self.generation_number - 1} of {self.num_generations}\n"
               f"-------------------------------------------\n")
-        for i, tracker_id in enumerate(self.population):
-            print(f"\nEvaluating tracker {tracker_id}, member {i} of {len(self.population)} in generation "
+        for i, tracker_id in enumerate(self.population, start=1):
+            print(f"Evaluating tracker {tracker_id}, member {i} of {len(self.population)} in generation "
                   f"{self.generation_number - 1} of {self.num_generations}\n")
             self.trackers[tracker_id].evaluate(self.output)
-
-    def save_generation(self):
-        self.generations.append([tracker_id for tracker_id in self.population])
-        self.generation_number += 1
 
     def get_probabilities(self, subpopulation):
         fitness_values = [self.trackers[tracker_id].fitness for tracker_id in subpopulation]
@@ -287,44 +284,56 @@ class GeneticAlgorithm:
             self.save_generation()
 
         self.evaluate_population()
+        
         best_tracker = max(self.population, key=lambda x: self.trackers[x].fitness)
-        self.save_evolutions()
         return self.trackers[best_tracker]
 
-    def save_evolutions(self):
+    def save_generation(self):
+        generation = [tracker_id for tracker_id in self.population]
+        self.generations.append(generation)
+
         population_history = {'generations': {}}
-        for generation_number, generation in enumerate(self.generations, start=1):
-            generation_details = {
-                'temperature': self.temperature(generation_number),
-                'children': [],
-                'parents': []
-            }
-            if generation_number in self.population_probabilities:
-                generation_details['population_probabilities'] = {tracker_id: prob for tracker_id, prob in
-                                                                  self.population_probabilities[generation_number]}
-
-            for tracker_id in generation:
-                tracker = self.trackers[tracker_id]
-                if tracker.generation == generation_number:
-                    generation_details['children'].append({
-                        'id': tracker.id,
-                        'fitness': tracker.fitness,
-                        'crossover': tracker.crossover,
-                        'mutations': tracker.mutated_params,
-                        'parents': tracker.parents
-                    })
-                else:
-                    generation_details['parents'].append({
-                        'id': tracker.id,
-                        'fitness': tracker.fitness,
-                        'generation': tracker.generation
-                    })
-
-            population_history['generations'][generation_number] = generation_details
 
         evolutions_file = os.path.join(self.output, 'evolutions.yaml')
+        with open(evolutions_file, 'r') as f:
+            if os.path.exists(evolutions_file):
+                data = yaml.safe_load(f)
+                if data is not None:
+                    population_history.update(data)
+
+        generation_details = {
+            'temperature': self.temperature(self.generation_number),
+            'children': [],
+            'parents': []
+        }
+        if self.generation_number in self.population_probabilities:
+            generation_details['population_probabilities'] = {tracker_id: prob for tracker_id, prob in
+                                                              self.population_probabilities[self.generation_number]}
+
+        for tracker_id in generation:
+            tracker = self.trackers[tracker_id]
+            if tracker.generation == self.generation_number:
+                generation_details['children'].append({
+                    'id': tracker.id,
+                    'fitness': tracker.fitness,
+                    'crossover': tracker.crossover,
+                    'mutations': tracker.mutated_params,
+                    'parents': tracker.parents
+                })
+            else:
+                generation_details['parents'].append({
+                    'id': tracker.id,
+                    'fitness': tracker.fitness,
+                    'generation': tracker.generation
+                })
+        population_history['generations'][self.generation_number] = generation_details
+
         with open(evolutions_file, 'w') as f:
             yaml.dump(population_history, f)
+
+            print(f"\nGeneration {self.generation_number} saved to {evolutions_file}\n")
+
+        self.generation_number += 1
 
 
 def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, generations, mutation_rate,
