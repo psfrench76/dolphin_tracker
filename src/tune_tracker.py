@@ -7,6 +7,7 @@ import random
 import os
 import math
 
+# TODO: Intermediate logging every generation
 
 @click.command()
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
@@ -126,6 +127,7 @@ class GeneticAlgorithm:
         self.population = []
         self.generations = []
         self.trackers = []
+        self.nans = set()
         self.population_probabilities = {}
         self.global_id_counter = 0
         self.generation_number = 1
@@ -175,7 +177,9 @@ class GeneticAlgorithm:
         print(f"\n-------------------------------------------\n"
               f"Evaluating Generation {self.generation_number - 1} of {self.num_generations}\n"
               f"-------------------------------------------\n")
-        for tracker_id in self.population:
+        for i, tracker_id in enumerate(self.population):
+            print(f"\nEvaluating tracker {tracker_id}, member {i} of {len(self.population)} in generation "
+                  f"{self.generation_number - 1} of {self.num_generations}\n")
             self.trackers[tracker_id].evaluate(self.output)
 
     def save_generation(self):
@@ -191,12 +195,18 @@ class GeneticAlgorithm:
         normalized_fitness = [(f - min_fitness) / (max_fitness - min_fitness) for f in fitness_values]
         temperature = self.temperature(self.generation_number - 1)
         exp_values = [math.exp((f - 1) / temperature) for f in normalized_fitness]
+        for i, e in enumerate(exp_values):
+            if math.isnan(e):
+                self.nans.add(subpopulation[i])
+                exp_values[i] = 0
         sum_exp_values = sum(exp_values)
         probabilities = [exp_val / sum_exp_values for exp_val in exp_values]
 
+        print(f"\nPotential parent ids: {subpopulation}")
         print(f"Fitness values: {fitness_values}")
         print(f"Normalized fitness: {normalized_fitness}")
         print(f"Exp values: {exp_values}")
+        print(f"Probabilities: {probabilities}")
 
         return probabilities
 
@@ -207,8 +217,6 @@ class GeneticAlgorithm:
             parent = max(potential_parents, key=lambda x: self.trackers[x].fitness)
         else:
             probabilities = self.get_probabilities(potential_parents)
-            print(f"Potential parent ids: {potential_parents}")
-            print(f"Probabilities: {probabilities}")
             while parent is None:
                 for tracker_id, p in zip(potential_parents, probabilities):
                     if random.random() < p:
@@ -349,6 +357,8 @@ def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, 
     print(f"Baseline tracker: {baseline_tracker}")
     print(f"Model: {model}")
     print(f"Dataset: {dataset}")
+    if ga.nans:
+        print(f"\nWARNING: NaNs were encountered in the fitness function for the following trackers: {ga.nans}")
     print(f"\nOriginal best tracker configuration saved to: {original_tracker_file}")
     print(f"Best tracker configuration saved to: {best_tracker_file}")
     print(f"Evolutions details saved to: {os.path.join(output, 'evolutions.yaml')}")
