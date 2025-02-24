@@ -16,10 +16,13 @@ import math
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
 @click.option('--model', required=True, help="Path to the model file.")
 @click.option('--output', required=True, help="Path to the output directory.")
+@click.option('--tracker', help="Tracker config file")
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
-@click.option('--tracker', help="Tracker config file")
-def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist, tracker):
+def main(dataset, model, output, tracker, botsort, nopersist):
+    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist)
+
+def run_tracking_and_evaluation(dataset, model, output, tracker, botsort=False, nopersist=False):
     print(f"Loading configuration files...")
     config = 'dolphin_tracker/cfg/settings.yaml'
 
@@ -115,7 +118,8 @@ def run_tracking_and_evaluation(dataset, model, output, botsort, nopersist, trac
         df_gt = mm.io.loadtxt(gt_file_path)
         df_pred = mm.io.loadtxt(results_file_path)
 
-        compute_metrics(metrics_file_path, metrics_events_path, df_gt, df_pred)
+        metrics = compute_metrics(metrics_file_path, metrics_events_path, df_gt, df_pred)
+        return metrics
     else:
         print(f"No ground truth label directory found; looked for {label_directory}. Not running metrics calculations.")
 
@@ -266,5 +270,7 @@ def compute_metrics(evaluation_file, events_file, df_gt, df_pred):
 
     print(f"\nResults written to {evaluation_file}")
 
+    return summary
+
 if __name__ == '__main__':
-    run_tracking_and_evaluation()
+    main()

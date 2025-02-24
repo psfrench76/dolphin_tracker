@@ -4,6 +4,7 @@ runs_dir: '../runs/'
 amp_check_models_dir: '../saves/pretrained'
 pretrained_models_dir: '../saves/pretrained'
 hyp_config_dir: 'cfg/hyp'
+tracker_config_dir: 'dolphin_tracker/cfg/trackers'
 checkpoint_file: 'checkpoint.yaml'
 
 # Custom settings
