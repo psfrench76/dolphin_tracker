@@ -8,12 +8,16 @@ from utils.generate_prediction_video import generate_video
 from utils.parse_video import extract_frames
 from src.utils.settings import settings, storage_path, project_path
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('input_data', help="Path to the video or dataset.")
-    parser.add_argument('--prediction_video', '-pv', action='store_true', help="Generate a video of the tracking results.")
-    parser.add_argument('--ground_truth_video', '-gv', action='store_true', help="Generate a video of the ground truth labels.")
-    parser.add_argument('--break_apart', '-b', action='store_true', help="Break video into individual frames and store in a dataset directory.")
+    parser.add_argument('--prediction_video', '-pv', action='store_true',
+                        help="Generate a video of the tracking results.")
+    parser.add_argument('--ground_truth_video', '-gv', action='store_true',
+                        help="Generate a video of the ground truth labels.")
+    parser.add_argument('--break_apart', '-b', action='store_true',
+                        help="Break video into individual frames and store in a dataset directory.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -66,8 +70,6 @@ def main():
         if not (input_path / image_dir_name).is_dir():
             raise FileNotFoundError(f"Dataset folder must contain an '{image_dir_name}' directory")
 
-
-
         if input_name in settings['dataset_split_dirs']:
             input_name = input_path.parent.name + '_' + input_name
 
@@ -91,8 +93,8 @@ def main():
 
     run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path)
 
-    summary_log +=  f"Tracking and evaluation complete. CSV results can be found in "\
-                    f"{output_dir_path / output_filename}\n"
+    summary_log += f"Tracking and evaluation complete. CSV results can be found in " \
+                   f"{output_dir_path / output_filename}\n"
 
     print(f"\nTracking and evaluation complete.\n")
 
@@ -121,6 +123,7 @@ def main():
         summary_log += f"Ground truth video output written to {video_path}\n"
 
     print(summary_log)
+
 
 if __name__ == '__main__':
     main()

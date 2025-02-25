@@ -8,6 +8,7 @@ This script takes an input directory of .json or .txt files (from the labelme co
 with each number of dolphins, similar to a histogram.
 """
 
+
 def count_dolphins_per_frame(directory):
     dolphin_counts = defaultdict(int)
 

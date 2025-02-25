@@ -3,6 +3,7 @@ import shutil
 import re
 import click
 
+
 @click.command()
 @click.argument('input_folder', type=click.Path(exists=True))
 @click.argument('output_folder', type=click.Path())
@@ -35,6 +36,7 @@ def copy_frame_range(input_folder, output_folder, start_frame, end_frame):
 
     # Print the final count of copied files
     click.echo(f"Total files copied: {copied_files_count}")
+
 
 if __name__ == '__main__':
     copy_frame_range()

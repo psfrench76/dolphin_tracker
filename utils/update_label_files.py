@@ -2,12 +2,14 @@ import os
 import shutil
 import click
 
+
 def index_files(directory):
     file_index = {}
     for root, _, files in os.walk(directory):
         for file in files:
             file_index[file] = os.path.join(root, file)
     return file_index
+
 
 def update_label_files(original_label_directory, new_label_directory):
     # Index the files in the original_label_directory
@@ -46,11 +48,13 @@ def update_label_files(original_label_directory, new_label_directory):
         for missing_file in sorted(missing_files_list):
             print(missing_file)
 
+
 @click.command()
 @click.argument('original_label_directory', type=click.Path(exists=True))
 @click.argument('new_label_directory', type=click.Path(exists=True))
 def main(original_label_directory, new_label_directory):
     update_label_files(original_label_directory, new_label_directory)
+
 
 if __name__ == "__main__":
     main()

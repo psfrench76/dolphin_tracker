@@ -12,10 +12,12 @@ It extracts the video name from the file name, and the file type by the file ext
 Usage: python collate_datafiles.py <input_path> <output_path>
 """
 
+
 def sanitize_filename(filename):
     # Remove version numbers in parentheses e.g., "(1)"
     filename = re.sub(r'\(\d+\)', '', filename)
     return filename
+
 
 def extract_video_name(filename, directory_name):
     # Find the video name by splitting the filename at the last underscore
@@ -23,6 +25,7 @@ def extract_video_name(filename, directory_name):
         return filename.rsplit('_', 1)[0]
     else:
         return directory_name
+
 
 def copy_files(input_path, output_path):
     # Create output directory if it doesn't exist
@@ -64,6 +67,7 @@ def copy_files(input_path, output_path):
         print(f"{copied_files}/{total_files} files copied", end='\r')
 
     print("\nCopying completed.")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

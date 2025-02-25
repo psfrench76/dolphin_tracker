@@ -16,6 +16,7 @@ Args:
     include_group_ids (bool): Whether to include group IDs in the dolphin labels.
 """
 
+
 def process_annotations(raw_jsons_directory, include_group_ids):
     for filename in os.listdir(raw_jsons_directory):
         if filename.endswith('.json'):
@@ -34,6 +35,7 @@ def process_annotations(raw_jsons_directory, include_group_ids):
             with open(filepath, 'w') as file:
                 json.dump(data, file, indent=4)
 
+
 def main():
     parser = argparse.ArgumentParser(description='Process JSON annotations to update dolphin labels.')
     parser.add_argument('jsons_directory', type=str, help='Path to the directory containing the JSON annotation files.')
@@ -42,6 +44,7 @@ def main():
     args = parser.parse_args()
 
     process_annotations(args.jsons_directory, args.groupids)
+
 
 if __name__ == "__main__":
     main()

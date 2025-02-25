@@ -6,6 +6,7 @@ import yaml
 import csv
 from datetime import datetime, timedelta
 
+
 def get_squ_results():
     result = subprocess.run(['squ'], capture_output=True, text=True)
     if result.returncode != 0:
@@ -18,6 +19,7 @@ def get_squ_results():
             job_id, job_status = match.groups()
             squ_results[job_id] = job_status
     return squ_results
+
 
 def get_slurm_job_id(run_name, squ_results):
     for job_id, job_status in squ_results.items():
@@ -41,6 +43,7 @@ def get_slurm_job_id(run_name, squ_results):
                             return job_id, squ_results.get(job_id, None)
 
     return None, None
+
 
 def check_status(run_name):
     squ_results = get_squ_results()
@@ -104,7 +107,8 @@ def check_status(run_name):
                                 last_line = list(csv.reader(file))[-1]
                                 if last_line and last_line[0].isdigit():
                                     last_epoch_time = datetime.fromtimestamp(os.path.getmtime(results_csv_path))
-                                    print(f"Status: Running and healthy, Most recent epoch: {last_line[0]}, Last epoch time: {last_epoch_time}")
+                                    print(
+                                        f"Status: Running and healthy, Most recent epoch: {last_line[0]}, Last epoch time: {last_epoch_time}")
                                     return
             print("Status: Running and healthy")
             return
@@ -130,6 +134,7 @@ def check_status(run_name):
                 return
 
     print(f"Status: Unknown. Job ID: {job_id}, Status: {job_status}")
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

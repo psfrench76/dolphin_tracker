@@ -1,6 +1,6 @@
 # Default configurations for tracking and video generation
 default_detector: 'saves/pretrained/e31_detector.pt'
-default_tracker: 'cfg/trackers/tuning/exp31/165-bal1_long_best2_firstrun.yaml'
+default_tracker: 'cfg/trackers/tuning/exp31/best_tracker.yaml'
 default_video_resize_ratio: 0.25
 
 

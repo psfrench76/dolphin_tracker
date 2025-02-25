@@ -19,10 +19,12 @@ to improve file transfer time).
 @click.option('--image_folder', required=True, help="Path to the folder containing image frames.")
 @click.option('--bbox_file', required=True, help="Path to the bounding box prediction file (MOT15 format).")
 @click.option('--output_folder', required=True, help="Path to the output folder for the video file.")
-@click.option('--resize_ratio', default=1.0, type=float, help="Ratio by which to resize the frames (e.g., 0.5 for half size).")
+@click.option('--resize_ratio', default=1.0, type=float,
+              help="Ratio by which to resize the frames (e.g., 0.5 for half size).")
 @click.option('--gt', is_flag=True, help="Label as ground truth video")
 def main(image_folder, bbox_file, output_folder, resize_ratio, gt):
     generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt)
+
 
 def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     with open('cfg/settings.yaml') as f:
@@ -67,7 +69,7 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     track_colors = {}
 
     # Regex pattern to extract frame number and base name
-    #pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
+    # pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
     pattern = r"(\d+)(?=[._](jpg|png|jpeg))"
 
     # Iterate over each frame
@@ -114,7 +116,8 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
             cv2.putText(frame, f'ID: {track_id}', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, track_colors[track_id], 2)
 
         # Add frame ID to the lower left corner
-        cv2.putText(frame, f'Frame: {frame_number}', (10, new_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.putText(frame, f'Frame: {frame_number}', (10, new_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 255, 255), 2)
 
         # Write the frame to the video
         video_writer.write(frame)

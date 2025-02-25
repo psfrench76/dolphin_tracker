@@ -18,6 +18,7 @@ else:
 def main(model_path, data_name, output_dir, split):
     evaluate_model(model_path, data_name, output_dir, split)
 
+
 def evaluate_model(model_path, data_name, output_path, split):
     phase = 'eval'
     model_path = Path(model_path)
@@ -50,7 +51,8 @@ def evaluate_model(model_path, data_name, output_path, split):
     print(f"Setting number of workers to: {num_workers}")
 
     print(f"Evaluating model on {split} split...")
-    results = model.val(data=data_config_path, split=split, project=project_dir_path, name=run_subdirectory, workers=num_workers)
+    results = model.val(data=data_config_path, split=split, project=project_dir_path, name=run_subdirectory,
+                        workers=num_workers)
 
     output_path.mkdir(parents=True, exist_ok=True)
     results_path = output_path / settings['evaluation_results_file']
@@ -59,6 +61,7 @@ def evaluate_model(model_path, data_name, output_path, split):
         file.write(f"Results: {results}\n")
 
     print(f"Evaluation results saved to {results_path}")
+
 
 if __name__ == '__main__':
     main()

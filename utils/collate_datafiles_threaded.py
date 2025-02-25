@@ -15,10 +15,12 @@ This is identical to collate_datafiles.py, except that it is threaded for faster
 Usage: python collate_datafiles_threaded.py <input_path> <output_path>
 """
 
+
 def sanitize_filename(filename):
     # Remove version numbers in parentheses e.g., "(1)"
     filename = re.sub(r'\(\d+\)', '', filename)
     return filename
+
 
 def extract_video_name(filename, directory_name):
     # Find the video name by splitting the filename at the last underscore
@@ -27,10 +29,12 @@ def extract_video_name(filename, directory_name):
     else:
         return directory_name
 
+
 def copy_file(src_path, dest_path):
     # Copy a single file from src_path to dest_path
     shutil.copy2(src_path, dest_path)
     return dest_path
+
 
 def copy_files(input_path, output_path):
     # Create output directory if it doesn't exist
@@ -66,6 +70,7 @@ def copy_files(input_path, output_path):
             print(f"{copied_files}/{total_files} files copied", end='\r')
 
     print("\nCopying completed.")
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:

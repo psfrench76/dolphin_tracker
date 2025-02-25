@@ -42,14 +42,16 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
                 checkpoint_settings = yaml.safe_load(file)
                 run_number = checkpoint_settings['run_number']
                 if run_number is None:
-                    raise ValueError(f"Checkpoint file {checkpoint_file_path} exists but does not contain a run number.")
+                    raise ValueError(
+                        f"Checkpoint file {checkpoint_file_path} exists but does not contain a run number.")
 
                 last_epoch_weights_path = project_dir_path / run_name / run_number / 'weights/last.pt'
                 if last_epoch_weights_path.is_file():
                     weights_path = last_epoch_weights_path
                     resume = True
                 else:
-                    print(f"Checkpoint file indicated {last_epoch_weights_path}, but weights file not found. Starting training with {weights_path} instead.")
+                    print(
+                        f"Checkpoint file indicated {last_epoch_weights_path}, but weights file not found. Starting training with {weights_path} instead.")
                 print(f"Loaded checkpoint file, resuming training under run number {run_number}")
         else:
             run_dir_path.mkdir(parents=True, exist_ok=True)
@@ -72,7 +74,8 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     dataset_path = Path(data_settings['path'].replace('../', '', 1))
 
     label_dir_paths = [dataset_path / data_settings[split].replace('images', 'labels') for split in ['train', 'val']]
-    new_label_dir_paths = [dataset_path / data_settings[split].replace('images', 'original_labels') for split in ['train', 'val']]
+    new_label_dir_paths = [dataset_path / data_settings[split].replace('images', 'original_labels') for split in
+                           ['train', 'val']]
 
     print("Processing labels...")
 
@@ -92,7 +95,7 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     if torch.cuda.is_available():
         print("CUDA is available.")
         gpu_count = torch.cuda.device_count()
-        device = [i for i in range (gpu_count)]
+        device = [i for i in range(gpu_count)]
         print("Using GPU device(s):", device)
     else:
         print("CUDA is not available.")
@@ -104,14 +107,15 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     model = YOLO(weights_path)
 
     if resume:
-        #Clear cache because it doesn't like reloading it here
+        # Clear cache because it doesn't like reloading it here
         model.data = None
 
     now = timeit.default_timer()
     print(f"Training model {run_name} on data {data_name}")
     for attempts in range(1, 4):
         try:
-            results = model.train(data=data_config_path, project=project_dir_path, name=run_subdirectory, workers=num_workers,
+            results = model.train(data=data_config_path, project=project_dir_path, name=run_subdirectory,
+                                  workers=num_workers,
                                   cfg=hyp_path, device=device, resume=resume, exist_ok=True)
             break
         except FileNotFoundError as e:
@@ -130,6 +134,7 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
             shutil.move(pt_file, new_path)
             pt_file.symlink_to(new_path)
 
+
 def process_labels(label_dir_path, new_label_dir_path):
     """
     Move label files with class IDs other than 0 to a new folder and save a copy with class ID 0 in the original folder.
@@ -142,7 +147,7 @@ def process_labels(label_dir_path, new_label_dir_path):
             if filename.endswith('.txt'):
                 label_file_path = dir_path / filename
                 new_label_file_path = new_label_dir_path / filename
-                for i in range(1,4):
+                for i in range(1, 4):
                     try:
                         with open(label_file_path, 'r') as f:
                             lines = f.readlines()
@@ -184,6 +189,7 @@ def process_labels(label_dir_path, new_label_dir_path):
                     shutil.move(label_file_path, new_label_file_path)
                     with open(label_file_path, 'w') as f:
                         f.writelines(new_lines)
+
 
 if __name__ == '__main__':
     train_detector()

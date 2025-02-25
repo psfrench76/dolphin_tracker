@@ -92,7 +92,8 @@ class Tracker:
 
     def evaluate(self, output_dir_path):
         if self.fitness is None:
-            results = run_tracking_and_evaluation(self.dataset_path, self.model_path, output_dir_path, self.tracker_path)
+            results = run_tracking_and_evaluation(self.dataset_path, self.model_path, output_dir_path,
+                                                  self.tracker_path)
             mota = results['mota'].values[0]
             idf1 = results['idf1'].values[0]
             motp = results['motp'].values[0]
@@ -102,7 +103,8 @@ class Tracker:
 
 class GeneticAlgorithm:
 
-    def __init__(self, baseline_config_path, model_path, dataset_path, run_name, output_dir_path, population_size=10, generations=20,
+    def __init__(self, baseline_config_path, model_path, dataset_path, run_name, output_dir_path, population_size=10,
+                 generations=20,
                  mutation_rate=0.1, mutation_range=0.1, distribution='uniform', num_parents=2,
                  initial_temperature=1.0, temperature_threshold=0.01):
 
@@ -157,7 +159,8 @@ class GeneticAlgorithm:
         print(
             f"Initializing Population of size {self.population_size}; Generation {self.generation_number} of {self.num_generations}")
         for i in range(self.population_size):
-            tracker = Tracker(baseline_config, self.new_id(), self.generation_number, self.model_path, self.dataset_path,
+            tracker = Tracker(baseline_config, self.new_id(), self.generation_number, self.model_path,
+                              self.dataset_path,
                               self.distribution)
             tracker.mutate_hyperparameters(self.mutation_rate, self.mutation_range)
             self.population.append(tracker.id)
@@ -254,7 +257,8 @@ class GeneticAlgorithm:
             }
 
         child_config.update(parent1.fixed)
-        child = Tracker(child_config, child_id, self.generation_number, self.model_path, self.dataset_path, self.distribution)
+        child = Tracker(child_config, child_id, self.generation_number, self.model_path, self.dataset_path,
+                        self.distribution)
         child.crossover = crossover_details
         child.parents = [parent1.id, parent2.id]
 
@@ -330,7 +334,8 @@ class GeneticAlgorithm:
         self.generation_number += 1
 
 
-def evolve_tracker(dataset_path, model_path, run_name, baseline_tracker_path, population_size, generations, mutation_rate,
+def evolve_tracker(dataset_path, model_path, run_name, baseline_tracker_path, population_size, generations,
+                   mutation_rate,
                    mutation_range, distribution, num_parents, initial_temperature=1.0, temperature_threshold=0.01):
     output_dir_path = storage_path(f"output/{run_name}")
 

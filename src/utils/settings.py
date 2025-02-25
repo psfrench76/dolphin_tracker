@@ -6,8 +6,10 @@ project_root = Path(__file__).resolve().parents[2]
 config_file = project_root / 'cfg/settings.yaml'
 print(f"project_root: {project_root}")
 
+
 def project_path(path):
     return project_root / path
+
 
 with open(config_file, 'r') as f:
     settings = yaml.safe_load(f)
@@ -21,6 +23,6 @@ settings.update(user_settings)
 
 storage_root = Path(settings['storage_root']).resolve()
 
+
 def storage_path(path):
     return storage_root / path
-

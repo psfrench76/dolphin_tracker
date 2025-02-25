@@ -2,6 +2,7 @@ import os
 import sys
 import pandas as pd
 
+
 def print_metrics(results_csv):
     if not os.path.exists(results_csv):
         print(f"Error: The file '{results_csv}' does not exist.")
@@ -35,6 +36,7 @@ def print_metrics(results_csv):
     # Print the metrics in the specified order
     print("\t".join(metrics))
     print("\t".join(map(str, row.values)))
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

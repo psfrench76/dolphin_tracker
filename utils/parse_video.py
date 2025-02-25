@@ -2,11 +2,13 @@ import subprocess
 import click
 import os
 
+
 @click.command()
 @click.argument('input_video', type=click.Path(exists=True))
 @click.argument('output_folder', type=click.Path())
 def main(input_video, output_folder):
     extract_frames(input_video, output_folder)
+
 
 def extract_frames(input_video, output_folder):
     """
@@ -23,7 +25,7 @@ def extract_frames(input_video, output_folder):
     # Use FFmpeg with GPU acceleration to extract frames
     ffmpeg_command = [
         'ffmpeg',
-        #'-hwaccel', 'cuda',  # Use CUDA for hardware acceleration if available
+        # '-hwaccel', 'cuda',  # Use CUDA for hardware acceleration if available
         '-i', input_video,
         f'{output_folder}/{video_name}_%06d.jpg'
     ]
@@ -31,6 +33,7 @@ def extract_frames(input_video, output_folder):
     subprocess.run(ffmpeg_command)
 
     click.echo(f"Frames extracted from {input_video} into {output_folder}.")
+
 
 if __name__ == '__main__':
     main()

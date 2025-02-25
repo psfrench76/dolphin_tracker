@@ -2,6 +2,7 @@ import os
 import click
 import re
 
+
 @click.command()
 @click.argument('label_folder', type=click.Path(exists=True))
 @click.argument('start_frame', type=int)
@@ -35,6 +36,7 @@ def remove_blank_labels(label_folder, start_frame, end_frame):
     # Print the final counts
     click.echo(f"Total files removed: {removed_count}")
     click.echo(f"Total files skipped: {skipped_count}")
+
 
 if __name__ == '__main__':
     remove_blank_labels()

@@ -1,6 +1,7 @@
 import os
 import click
 
+
 @click.command()
 @click.argument('image_folder', type=click.Path(exists=True))
 @click.argument('label_folder', type=click.Path())
@@ -30,6 +31,7 @@ def create_blank_labels(image_folder, label_folder):
     # Print the final counts
     click.echo(f"Total files created: {created_count}")
     click.echo(f"Total files skipped: {skipped_count}")
+
 
 if __name__ == '__main__':
     create_blank_labels()

@@ -1,6 +1,7 @@
 import sys
 import ast
 
+
 def extract_metrics(file_path):
     with open(file_path, 'r') as file:
         for line in file:
@@ -21,6 +22,7 @@ def extract_metrics(file_path):
                 print(f"Precision\tRecall\tmAP50\tmAP50-95")
                 print(f"{precision}\t{recall}\t{map50}\t{map50_95}")
                 break
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

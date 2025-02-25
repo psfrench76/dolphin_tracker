@@ -3,6 +3,7 @@ import shutil
 import random
 import click
 
+
 @click.command()
 @click.argument('test_folder', type=click.Path(exists=True))
 @click.argument('train_folder', type=click.Path())
@@ -12,7 +13,8 @@ import click
 @click.argument('valid_prop', type=float)
 @click.argument('test_prop', type=float)
 @click.argument('negative_prop', type=float)
-def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input_folder, train_prop, valid_prop, test_prop, negative_prop):
+def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input_folder, train_prop, valid_prop,
+                                  test_prop, negative_prop):
     """
     Generate train and valid sets from input folders based on given proportions.
     """
@@ -96,6 +98,7 @@ def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input
     click.echo(f"Negative images processed: {len(negative_images)}")
     click.echo(f"Negative images copied to train set: {negative_train_count}")
     click.echo(f"Negative images copied to valid set: {negative_valid_count}")
+
 
 if __name__ == '__main__':
     generate_train_and_valid_sets()

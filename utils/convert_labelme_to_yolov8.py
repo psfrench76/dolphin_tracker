@@ -17,6 +17,7 @@ subdirectory. Second, use the 'cp -r' command to copy the image files to the 'im
 Usage: convert_labelme_to_yolov8.py <input_dir> <output_dir>
 """
 
+
 @click.command()
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path())

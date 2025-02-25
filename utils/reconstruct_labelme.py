@@ -20,6 +20,7 @@ python utils/reconstruct_labelme.py --roboflow_dataset ../data/roboflow_dolphine
 ../data/rf_dolphines_v8_labelme/train/ --original_source ../data/original_source/collated/ --copyoriginaljpgs
 """
 
+
 def index_files(original_source):
     # Create indices for JSON and JPEG files for quick lookup
     json_index = {}
@@ -33,9 +34,11 @@ def index_files(original_source):
                 jpg_index[basename] = os.path.join(root, file)
     return json_index, jpg_index
 
+
 def copy_file(src_path, dest_path):
     # Copy a single file from src_path to dest_path
     shutil.copy2(src_path, dest_path)
+
 
 def main(roboflow_dataset, output_folder, original_source, copy_original_jpgs):
     # Create output directories if they don't exist
@@ -94,6 +97,7 @@ def main(roboflow_dataset, output_folder, original_source, copy_original_jpgs):
     print(f"Skipped {len(skipped_files)} files.")
     for name, reason in skipped_files:
         print(f"Skipped {name}: {reason}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Combine JPEG and JSON files into an output folder.")

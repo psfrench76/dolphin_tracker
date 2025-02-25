@@ -3,6 +3,7 @@ import sys
 import pandas as pd
 import yaml
 
+
 def find_results_csv(parent_dir, slurm_job_id, run_name, experiment):
     # Construct paths
     checkpoint_path = os.path.join(parent_dir, f"runs/train/stage1/{experiment}", run_name, "checkpoint.yaml")
@@ -43,6 +44,7 @@ def find_results_csv(parent_dir, slurm_job_id, run_name, experiment):
 
     return results_csv_path
 
+
 def print_metrics(results_csv_path):
     # Read the CSV file
     data = pd.read_csv(results_csv_path)
@@ -73,6 +75,7 @@ def print_metrics(results_csv_path):
     # Print the metrics in the specified order
     print("\t".join(metrics))
     print("\t".join(map(str, best_row.values)))
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:

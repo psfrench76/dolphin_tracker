@@ -11,6 +11,7 @@ def validate_args(dataset, model, tracker):
     if tracker is not None and not os.path.exists(tracker):
         raise ValueError(f"Tracker configuration file {tracker} does not exist.")
 
+
 @click.command()
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
 @click.option('--model', required=True, help="Path to the model file.")

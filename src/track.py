@@ -27,7 +27,9 @@ else:
 def main(dataset, model, output, tracker, botsort, nopersist):
     results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist)
 
-def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False, nopersist=False):
+
+def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
+                                nopersist=False):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -209,15 +211,17 @@ def compute_metrics(metrics_file_path, metrics_events_path, gt_df, pred_df):
         gt_ids = g.index.get_level_values('Id').values
         pr_ids = p.index.get_level_values('Id').values
 
-        gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in g.iterrows()]
-        tr_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in p.iterrows()]
+        gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in
+                    g.iterrows()]
+        tr_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in
+                    p.iterrows()]
 
         distances = np.full((len(gt_ids), len(pr_ids)), np.inf)
         for i, gt_box in enumerate(gt_boxes):
             for j, tr_box in enumerate(tr_boxes):
-                #print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
+                # print(f"Comparing gt box {i}:{gt_box} to pr box {j}:{tr_box}")
                 iou = calculate_iou_shapely(gt_box, tr_box)
-                #print(f"IOU: {iou}")
+                # print(f"IOU: {iou}")
                 if iou > 0.5:
                     distances[i, j] = 1 - iou
 
@@ -234,6 +238,7 @@ def compute_metrics(metrics_file_path, metrics_events_path, gt_df, pred_df):
     print(f"\nResults written to {metrics_file_path}")
 
     return summary
+
 
 if __name__ == '__main__':
     main()

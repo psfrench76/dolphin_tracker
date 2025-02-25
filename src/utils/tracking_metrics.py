@@ -3,6 +3,7 @@ from .settings import settings
 
 
 class TrackingMetrics:
+
     def __init__(self):
         self.acc = [mm.MOTAccumulator(auto_id=False)]
         self.acc_names = ['Default']
@@ -39,4 +40,3 @@ class TrackingMetrics:
 
     def write_events(self, filename):
         self.acc[0].mot_events.to_csv(filename)
-

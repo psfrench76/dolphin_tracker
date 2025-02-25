@@ -8,6 +8,7 @@ of dolphins in any of the label files. As this can vary by frame this is useful 
 of dolphins in a given video is.
 """
 
+
 def find_max_dolphins_per_frame(directory):
     max_dolphins = 0
 
