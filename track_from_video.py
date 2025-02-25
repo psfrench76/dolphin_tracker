@@ -7,6 +7,10 @@ from src.track import run_tracking_and_evaluation
 from utils.generate_prediction_video import generate_video
 from utils.parse_video import extract_frames
 from src.utils.settings import settings, storage_path, project_path
+import pysrt
+import pandas as pd
+import re
+from PIL import Image
 
 
 def main():
@@ -18,16 +22,21 @@ def main():
                         help="Generate a video of the ground truth labels.")
     parser.add_argument('--break_apart', '-b', action='store_true',
                         help="Break video into individual frames and store in a dataset directory.")
+    parser.add_argument('--srt', '-srt', help="Path to an SRT file corresponding to the video input.")
 
     args = parser.parse_args()
     run_args = vars(args)
 
     break_apart = args.break_apart
     input_path = Path(args.input_data)
+    srt_path = Path(args.srt) if args.srt else None
     input_name = input_path.stem
+    image_height = None
 
     summary_log = "--------------------------------------------\n\n"
 
+    # TODO: make model and tracker into optional arguments
+    # TODO: allow for custom output path?
     model_path = storage_path(settings['default_detector'])
     tracker_path = project_path(settings['default_tracker'])
 
@@ -51,10 +60,10 @@ def main():
             print("\nBreaking video into individual frames...\n")
             dataset_path = storage_path(f'data/extracted/{input_name}')
             image_dir_path = dataset_path / image_dir_name
-            extract_frames(input_path, image_dir_path)
+            image_height = extract_frames(input_path, image_dir_path)
             summary_log += f"Video broken into individual frames and stored in {image_dir_path}\n"
         else:
-            # TODO - implement mp4/mov input for tracker
+            # TODO - implement mp4/mov input for tracker. Set image_height
             dataset_path = input_path
             raise ValueError("Video input for tracker not implemented yet")
 
@@ -74,8 +83,24 @@ def main():
             input_name = input_path.parent.name + '_' + input_name
 
         dataset_path = input_path
+
+        any_frame_Path = next((input_path / image_dir_name).glob('*.jpg'))
+        with Image.open(any_frame_Path) as img:
+            image_height = img.height
+
+
     else:
         raise ValueError("Input data must be a file or a directory.")
+
+    if srt_path:
+        if not srt_path.is_file():
+            raise FileNotFoundError(f"SRT file not found at {srt_path}")
+
+        print(f"Using SRT file at {srt_path}")
+        frame_altitude_df = load_srt_altitudes(srt_path, image_height)
+    else:
+        frame_altitude_df = None
+
 
     output_dir_path = storage_path(f"output/tracker/{input_name}")
     output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -85,13 +110,14 @@ def main():
     run_args['model'] = str(model_path)
     run_args['tracker'] = str(tracker_path)
     run_args['dataset'] = str(dataset_path)
+    run_args['srt'] = str(srt_path)
 
     with open(arg_outfile_path, "w") as f:
         yaml.dump(run_args, f)
 
     output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
 
-    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path)
+    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, camera_df=frame_altitude_df)
 
     summary_log += f"Tracking and evaluation complete. CSV results can be found in " \
                    f"{output_dir_path / output_filename}\n"
@@ -124,6 +150,37 @@ def main():
 
     print(summary_log)
 
+def load_srt_altitudes(srt_path, image_height_px):
+    srt = pysrt.open(srt_path)
+    altitudes = []
+    frame_indexes = []
+    focal_lengths = []
+    rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
+    focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
+
+    for sub in srt:
+        rel_alt_match = re.search(rel_alt_pattern, sub.text)
+        focal_len_match = re.search(focal_len_pattern, sub.text)
+
+        if rel_alt_match and focal_len_match:
+            altitudes.append(float(rel_alt_match.group(1)))
+            focal_lengths.append(float(focal_len_match.group(1)) / 100)
+            frame_indexes.append(sub.index)
+        else:
+            raise ValueError(
+                f"Could not find relative altitude or focal length in frame {sub.index} subtitle: {sub.text}")
+
+    df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_mm': focal_lengths})
+    df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
+
+    df['GSD_cmpx'] = (df['est_alt_m'] * 100 * settings['drone_sensor_height_mm']) / (df['focal_len_mm'] * image_height_px)
+    print(f"\nSRT data for first frame: GSD: {df['GSD_cmpx'][0]} cm/px. Image height: {image_height_px} px. Focal length: {df['focal_len_mm'][0]} mm. "
+          f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} mm.")
+    print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
+
+    print(df)
+    print(df.iloc[2])
+    return df
 
 if __name__ == '__main__':
     main()

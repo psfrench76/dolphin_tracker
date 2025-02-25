@@ -1,6 +1,7 @@
 import subprocess
 import click
 import os
+from PIL import Image
 
 
 @click.command()
@@ -34,6 +35,12 @@ def extract_frames(input_video, output_folder):
 
     click.echo(f"Frames extracted from {input_video} into {output_folder}.")
 
+    # Get the height of one of the extracted frames
+    first_frame_path = os.path.join(output_folder, f'{video_name}_000001.jpg')
+    with Image.open(first_frame_path) as img:
+        image_height = img.height
+
+    return image_height
 
 if __name__ == '__main__':
     main()

@@ -2,7 +2,8 @@
 default_detector: 'saves/pretrained/e31_detector.pt'
 default_tracker: 'cfg/trackers/tuning/exp31/best_tracker.yaml'
 default_video_resize_ratio: 0.25
-
+estimated_drone_starting_altitude_m: 2.25 # meters
+drone_sensor_height_mm: 8 # millimeters
 
 # File system organization
 storage_root: '..' # Intended for large data, not code. Either absolute, or relative to the project root.

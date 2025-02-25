@@ -29,7 +29,7 @@ def main(dataset, model, output, tracker, botsort, nopersist):
 
 
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
-                                nopersist=False):
+                                nopersist=False, camera_df=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -88,7 +88,8 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
     results = model_instance.track(source=image_dir_path, tracker=tracker_path, stream=True, device=device,
                                    persist=(not nopersist), iou=iou)
 
-    save_tracker_results(image_dir_path, results_file_path, results, researcher_output_path=researcher_output_path)
+    save_tracker_results(image_dir_path, results_file_path, results, researcher_output_path=researcher_output_path,
+                         camera_df=camera_df)
     if label_dir_path.is_dir():
         save_ground_truth(gt_file_path, label_dir_path)
 
@@ -101,7 +102,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
         print(f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics calculations.")
 
 
-def save_tracker_results(image_dir_path, results_file_path, results, researcher_output_path=None):
+def save_tracker_results(image_dir_path, results_file_path, results, researcher_output_path=None, camera_df=None):
     files = list(image_dir_path.glob('*.jpg'))
     files.sort()
     pattern = r"(\d+)(?=[._](jpg))"
@@ -115,11 +116,22 @@ def save_tracker_results(image_dir_path, results_file_path, results, researcher_
     with open(results_file_path, 'w') as f:
         if researcher_output_path:
             rf = open(researcher_output_path, 'w')
-            rf.write(f'FrameID,ObjectID,Point1X,Point1Y,Point2X,Point2Y,Width,Height,CenterX,CenterY\n')
+            rf.write(f'FrameID,ObjectID,Point1X_px,Point1Y_px,Point2X_px,Point2Y_px,Width_px,Height_px,CenterX_px,CenterY_px')
+            if camera_df is not None:
+                rf.write(',Point1X_m,Point1Y_m,Point2X_m,Point2Y_m,Width_m,Height_m,CenterX_m,CenterY_m,Altitude_m,GSD_cmpx')
+            rf.write('\n')
 
         for i, result in enumerate(results):
             match = re.search(pattern, str(files[i]))
             frame_id = match.group(1)
+            if camera_df is not None:
+                if i < len(camera_df):
+                    camera_row = camera_df.iloc[i]
+                else:
+                    camera_df = None
+                    print(f"------------------------------------------\n"
+                          f"Warning: Ran out of rows in SRT file at frame index {i+1} (frame ID {frame_id}).\n"
+                          f"Will use altitude and focal length from the last available row for the remaining frames.\n")
             for box in result.boxes:
                 if box.id:
                     bbox = box.xyxyn[0].tolist()
@@ -133,11 +145,28 @@ def save_tracker_results(image_dir_path, results_file_path, results, researcher_
                     f.write(
                         f'{frame_id},{track_id},{center_x},{center_y},{width},{height},-1,-1,{conf}\n')
                     if rf:
+                        point_a_x_px = point_a_x * img_width
+                        point_a_y_px = point_a_y * img_height
+                        point_b_x_px = point_b_x * img_width
+                        point_b_y_px = point_b_y * img_height
+                        center_x_px = center_x * img_width
+                        center_y_px = center_y * img_height
+                        width_px = width * img_width
+                        height_px = height * img_height
                         rf.write(
-                            f'{frame_id},{track_id},{point_a_x * img_width},{point_a_y * img_height},'
-                            f'{point_b_x * img_width},{point_b_y * img_height},'
-                            f'{width * img_width},{height * img_height},'
-                            f'{center_x * img_width},{center_y * img_height}\n')
+                            f'{frame_id},{track_id},{point_a_x_px},{point_a_y_px},'
+                            f'{point_b_x_px},{point_b_y_px},'
+                            f'{width_px},{height_px},'
+                            f'{center_x_px},{center_y_px}')
+                        if camera_row is not None:
+                            gsd_mpx = camera_row['GSD_cmpx'] / 100
+                            rf.write(
+                                f',{point_a_x_px * gsd_mpx},{point_a_y_px * gsd_mpx},'
+                                f'{point_b_x_px * gsd_mpx},{point_b_y_px * gsd_mpx},'
+                                f'{width_px * gsd_mpx},{height_px * gsd_mpx},'
+                                f'{center_x_px * gsd_mpx},{center_y_px * gsd_mpx},'
+                                f'{camera_row["est_alt_m"]},{camera_row["GSD_cmpx"]}')
+                        rf.write('\n')
 
         if rf:
             rf.close()
