@@ -1,15 +1,12 @@
-# File System Organization
-data_config_dir: 'cfg/data'
-runs_dir: '../runs/'
-amp_check_models_dir: '../saves/pretrained'
-pretrained_models_dir: '../saves/pretrained'
-hyp_config_dir: 'cfg/hyp'
-tracker_config_dir: 'dolphin_tracker/cfg/trackers'
-checkpoint_file: 'checkpoint.yaml'
-output_dir: '../output'
-dataset_dir: '../data'
-extracted_frames_dir: 'extracted' # Subdirectory of dataset_dir
-tracker_output_dir: 'tracker' # Subdirectory of output_dir
+# Default configurations for tracking and video generation
+default_detector: 'saves/pretrained/e31_detector.pt'
+default_tracker: 'cfg/trackers/tuning/exp31/165-bal1_long_best2_firstrun.yaml'
+default_video_resize_ratio: 0.25
+
+
+# File system organization
+storage_root: '..' # Intended for large data, not code. Either absolute, or relative to the project root.
+amp_check_models_dir: 'saves/pretrained' # Subdirectory of storage_root
 images_dir: 'images' # Subdirectory of all dataset directories
 labels_dir: 'labels' # Subdirectory of all dataset directories
 dataset_split_dirs: # Subdirectories of some datasets -- only used for searching and not for saving
@@ -18,10 +15,12 @@ dataset_split_dirs: # Subdirectories of some datasets -- only used for searching
   - 'valid'
   - 'test'
 
-# Custom settings
-tracker_empty_frames_reset: 25
+# Output file names
+args_file: 'args.yaml' # Arguments file for track_from_video.py
+evaluation_results_file: 'evaluation_results.txt' # For eval.py
+evolution_log_file: 'evolutions.yaml'
 
-# Tracking results files
+# Tracking results files (all of these will have the run name prepended)
 gt_file_suffix: 'gt_formatted.txt'
 results_file_suffix: 'results.txt'
 metrics_file_suffix: 'mot_evaluation.csv'
@@ -30,8 +29,13 @@ researcher_output_suffix: 'output.csv'
 prediction_video_suffix: 'predictions.mp4'
 gt_video_suffix: 'gt.mp4'
 
-ultralytics_bytetrack: 'dolphin_tracker/cfg/trackers/bytetrack_default.yaml'
-ultralytics_botsort: 'dolphin_tracker/cfg/trackers/botsort_default.yaml'
+# Default tracking configuration files
+ultralytics_bytetrack: 'cfg/trackers/bytetrack_default.yaml' # Relative to project root
+ultralytics_botsort: 'cfg/trackers/botsort_default.yaml' # Relative to project root
+
+# Files for internal use
+tracking_hyp_file: 'tracking_hyperparameters.yaml'
+checkpoint_file: 'checkpoint.yaml'
 
 tracking_metrics:
   - mota
@@ -51,10 +55,33 @@ tracking_metrics:
   - partially_tracked
   - mostly_lost
 
-# Defaults for track_from_video.py
-default_detector: '../saves/pretrained/e31_detector.pt'
-default_tracker: 'cfg/trackers/tuning/exp31/165-bal1_long_best2_firstrun.yaml'
-default_video_resize_ratio: 0.25
+tracking_metrics_names:
+  hota_alpha: 'HOTA'
+  assa_alpha: 'ASSA'
+  deta_alpha: 'DETA'
+  num_frames: 'Frames'
+  idf1: 'ID_F1'
+  idp: 'ID_Precision'
+  idr: 'ID_Recall'
+  recall: 'Recall'
+  precision: 'Precision'
+  num_objects: 'Objects'
+  mostly_tracked: 'Mostly_Track'
+  partially_tracked: 'Part_Track'
+  mostly_lost: 'Mostly_Lost'
+  num_false_positives: 'False_Pos'
+  num_misses: 'Misses'
+  num_switches: 'Switches'
+  num_fragmentations: 'Fragmt.'
+  mota: 'MOTA'
+  motp: 'MOTP'
+  id_global_assignment: 'ID_Global_Assn'
+  obj_frequencies: 'Object_Freq'
+  num_unique_objects: 'Num_Unique_Objects'
+  idfp: 'ID_False_Pos'
+  idfn: 'ID_False_Neg'
+  idtp: 'ID_True_Pos'
+  num_matches: 'Num_Matches'
 
-# Filenames for track_from_video.py
-args_file: 'args.yaml'
+
+

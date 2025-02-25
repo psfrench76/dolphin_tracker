@@ -1,14 +1,12 @@
 from random import shuffle
 
 from track import run_tracking_and_evaluation
+from utils.settings import settings, project_path, storage_path
 import click
 import yaml
 import random
-import os
 import math
 
-
-# TODO: Intermediate logging every generation
 
 @click.command()
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
@@ -29,19 +27,17 @@ def main(dataset, model, run_name, tracker, ps, gen, mrate, mrange, dist, np):
 
 class Tracker:
 
-    def __init__(self, config, id, generation, model, dataset, distribution='uniform'):
-        if isinstance(config, str):
-            cfg = yaml.safe_load(config)
-        elif isinstance(config, dict):
+    def __init__(self, config, id, generation, model_path, dataset_path, distribution='uniform'):
+        if isinstance(config, dict):
             cfg = config
         else:
-            raise ValueError("Config must be a string or a dictionary")
+            cfg = yaml.safe_load(config)
 
         self.mins = {}
         self.maxs = {}
 
-        with open('dolphin_tracker/cfg/tracking_hyperparameters.yaml', 'r') as file:
-            hyp_cfg_dict = yaml.safe_load(file)
+        with open(project_path(f"cfg/{settings['tracking_hyp_file']}"), 'r') as f:
+            hyp_cfg_dict = yaml.safe_load(f)
             hyp_dict = {}
             fixed_dict = {}
             for key, (min_val, max_val) in hyp_cfg_dict['hyp'].items():
@@ -55,22 +51,22 @@ class Tracker:
         self.hyp = hyp_dict
         self.fixed = fixed_dict
         self.distribution = distribution
-        self.model = model
-        self.dataset = dataset
+        self.model_path = model_path
+        self.dataset_path = dataset_path
         self.fitness = None
-        self.tracker_file = None
+        self.tracker_path = None
         self.mutated_params = {}
         self.id = id
         self.crossover = {}
         self.generation = generation
         self.parents = []
 
-    def write_yaml(self, filename):
-        with open(filename, 'w') as f:
+    def write_yaml(self, filepath):
+        with open(filepath, 'w') as f:
             params = self.hyp.copy()
             params.update(self.fixed)
             yaml.dump(params, f)
-        self.tracker_file = filename
+        self.tracker_path = filepath
 
     def mutate_hyperparameters(self, mutation_rate, mutation_range):
         self.fitness = None
@@ -94,9 +90,9 @@ class Tracker:
                         self.hyp[key] = new_value
                         self.mutated_params[key] = self.hyp[key]
 
-    def evaluate(self, output):
+    def evaluate(self, output_dir_path):
         if self.fitness is None:
-            results = run_tracking_and_evaluation(self.dataset, self.model, output, self.tracker_file)
+            results = run_tracking_and_evaluation(self.dataset_path, self.model_path, output_dir_path, self.tracker_path)
             mota = results['mota'].values[0]
             idf1 = results['idf1'].values[0]
             motp = results['motp'].values[0]
@@ -106,17 +102,15 @@ class Tracker:
 
 class GeneticAlgorithm:
 
-    def __init__(self, config_path, model, dataset, run_name, output, population_size=10, generations=20,
+    def __init__(self, baseline_config_path, model_path, dataset_path, run_name, output_dir_path, population_size=10, generations=20,
                  mutation_rate=0.1, mutation_range=0.1, distribution='uniform', num_parents=2,
                  initial_temperature=1.0, temperature_threshold=0.01):
-        with open('dolphin_tracker/cfg/settings.yaml', 'r') as file:
-            self.settings = yaml.safe_load(file)
 
-        self.config_path = config_path
-        self.model = model
-        self.dataset = dataset
+        self.baseline_config_path = baseline_config_path
+        self.model_path = model_path
+        self.dataset_path = dataset_path
         self.run_name = run_name
-        self.output = output
+        self.output_dir_path = output_dir_path
         self.population_size = population_size
         self.num_generations = generations
         self.mutation_rate = mutation_rate
@@ -124,7 +118,7 @@ class GeneticAlgorithm:
         self.distribution = distribution
         self.num_parents = num_parents
 
-        self.yaml_dir = str(os.path.join(self.settings['tracker_config_dir'], 'evolved', self.run_name))
+        self.yaml_dir_path = project_path(f'cfg/trackers/evolved/{self.run_name}')
         self.population = []
         self.generations = []
         self.trackers = []
@@ -151,25 +145,25 @@ class GeneticAlgorithm:
         self.global_id_counter += 1
         return this_id
 
-    def generation_dir(self):
-        directory = str(os.path.join(self.yaml_dir, f"gen{self.generation_number}"))
-        os.makedirs(directory, exist_ok=True)
-        return directory
+    def generation_dir_path(self):
+        generation_dir_path = self.yaml_dir_path / f"gen{self.generation_number}"
+        generation_dir_path.mkdir(parents=True, exist_ok=True)
+        return generation_dir_path
 
     def initialize_population(self):
-        with open(self.config_path, 'r') as f:
-            config = yaml.safe_load(f)
+        with open(self.baseline_config_path, 'r') as f:
+            baseline_config = yaml.safe_load(f)
         self.population = []
         print(
             f"Initializing Population of size {self.population_size}; Generation {self.generation_number} of {self.num_generations}")
         for i in range(self.population_size):
-            tracker = Tracker(config, self.new_id(), self.generation_number, self.model, self.dataset,
+            tracker = Tracker(baseline_config, self.new_id(), self.generation_number, self.model_path, self.dataset_path,
                               self.distribution)
             tracker.mutate_hyperparameters(self.mutation_rate, self.mutation_range)
             self.population.append(tracker.id)
             self.trackers.append(tracker)
 
-            child_file = os.path.join(self.generation_dir(), f"{tracker.id}.yaml")
+            child_file = self.generation_dir_path() / f"{tracker.id}.yaml"
             tracker.write_yaml(child_file)
 
         self.save_generation()
@@ -181,7 +175,7 @@ class GeneticAlgorithm:
         for i, tracker_id in enumerate(self.population, start=1):
             print(f"Evaluating tracker {tracker_id}, member {i} of {len(self.population)} in generation "
                   f"{self.generation_number - 1} of {self.num_generations}\n")
-            self.trackers[tracker_id].evaluate(self.output)
+            self.trackers[tracker_id].evaluate(self.output_dir_path)
 
     def get_probabilities(self, subpopulation):
         fitness_values = [self.trackers[tracker_id].fitness for tracker_id in subpopulation]
@@ -247,7 +241,7 @@ class GeneticAlgorithm:
 
     def crossover(self, parent1, parent2):
         child_config = {}
-        child_number = self.new_id()
+        child_id = self.new_id()
 
         crossover_details = {}
 
@@ -260,13 +254,13 @@ class GeneticAlgorithm:
             }
 
         child_config.update(parent1.fixed)
-        child = Tracker(child_config, child_number, self.generation_number, self.model, self.dataset, self.distribution)
+        child = Tracker(child_config, child_id, self.generation_number, self.model_path, self.dataset_path, self.distribution)
         child.crossover = crossover_details
         child.parents = [parent1.id, parent2.id]
 
         child.mutate_hyperparameters(self.mutation_rate, self.mutation_range)
 
-        child_file = os.path.join(self.generation_dir(), f"{child_number}.yaml")
+        child_file = self.generation_dir_path() / f"{child_id}.yaml"
         child.write_yaml(child_file)
         return child
 
@@ -294,9 +288,9 @@ class GeneticAlgorithm:
 
         population_history = {'generations': {}}
 
-        evolutions_file = os.path.join(self.output, 'evolutions.yaml')
-        with open(evolutions_file, 'r') as f:
-            if os.path.exists(evolutions_file):
+        evolutions_file_path = self.output_dir_path / settings['evolution_log_file']
+        with open(evolutions_file_path, 'r') as f:
+            if evolutions_file_path.is_file():
                 data = yaml.safe_load(f)
                 if data is not None:
                     population_history.update(data)
@@ -328,23 +322,23 @@ class GeneticAlgorithm:
                 })
         population_history['generations'][self.generation_number] = generation_details
 
-        with open(evolutions_file, 'w') as f:
+        with open(evolutions_file_path, 'w') as f:
             yaml.dump(population_history, f)
 
-            print(f"\nGeneration {self.generation_number} saved to {evolutions_file}\n")
+            print(f"\nGeneration {self.generation_number} saved to {evolutions_file_path}\n")
 
         self.generation_number += 1
 
 
-def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, generations, mutation_rate,
+def evolve_tracker(dataset_path, model_path, run_name, baseline_tracker_path, population_size, generations, mutation_rate,
                    mutation_range, distribution, num_parents, initial_temperature=1.0, temperature_threshold=0.01):
-    output = os.path.join("output", run_name)
+    output_dir_path = storage_path(f"output/{run_name}")
 
-    ga = GeneticAlgorithm(config_path=baseline_tracker,
-                          model=model,
-                          dataset=dataset,
+    ga = GeneticAlgorithm(baseline_config_path=baseline_tracker_path,
+                          model_path=model_path,
+                          dataset_path=dataset_path,
                           run_name=run_name,
-                          output=output,
+                          output_dir_path=output_dir_path,
                           population_size=population_size,
                           generations=generations,
                           mutation_rate=mutation_rate,
@@ -354,23 +348,23 @@ def evolve_tracker(dataset, model, run_name, baseline_tracker, population_size, 
                           initial_temperature=initial_temperature,
                           temperature_threshold=temperature_threshold)
     best_tracker = ga.run()
-    original_tracker_file = best_tracker.tracker_file
-    best_tracker_file = os.path.join(output, "best_tracker.yaml")
+    original_tracker_file = best_tracker.tracker_path
+    best_tracker_file = output_dir_path / f"best_tracker.yaml"
     best_tracker.write_yaml(best_tracker_file)
 
-    results = run_tracking_and_evaluation(dataset, model, output, best_tracker_file)
+    results = run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, best_tracker_file)
 
     print(f"\nEvolution finished. Best results:\n{results}")
     print(f"Best tracker: {best_tracker.id} from generation {best_tracker.generation}. Fitness: {best_tracker.fitness}")
     print(f"Ran {generations} generations with {population_size} trackers per generation.")
-    print(f"Baseline tracker: {baseline_tracker}")
-    print(f"Model: {model}")
-    print(f"Dataset: {dataset}")
+    print(f"Baseline tracker: {baseline_tracker_path}")
+    print(f"Model: {model_path}")
+    print(f"Dataset: {dataset_path}")
     if ga.nans:
         print(f"\nWARNING: NaNs were encountered in the fitness function for the following trackers: {ga.nans}")
     print(f"\nOriginal best tracker configuration saved to: {original_tracker_file}")
     print(f"Best tracker configuration saved to: {best_tracker_file}")
-    print(f"Evolutions details saved to: {os.path.join(output, 'evolutions.yaml')}")
+    print(f"Evolutions details saved to: {output_dir_path / settings['evolution_log_file']}")
 
 
 if __name__ == '__main__':

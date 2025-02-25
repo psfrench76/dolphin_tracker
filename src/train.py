@@ -9,6 +9,13 @@ import shutil
 import psutil
 import timeit
 import time
+from pathlib import Path
+
+if __package__ is None or __package__ == '':
+    from utils.settings import settings, project_path, storage_path
+else:
+    from .utils.settings import settings, project_path, storage_path
+
 
 @click.command()
 @click.option('--data_name', required=True, help='Name of the data configuration file.')
@@ -18,64 +25,59 @@ import time
 @click.option('--checkpoint_reload', is_flag=True, help='If set, save every epoch and reload from the last checkpoint.')
 def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reload):
     print(f"Loading configuration files...")
-    config = 'cfg/settings.yaml'
+
     phase = 'train'
 
-    with open(config, 'r') as file:
-        settings = yaml.safe_load(file)
-
-    project = os.path.join(settings['runs_dir'], phase, 'stage1')
+    project_dir_path = storage_path(f"runs/{phase}/stage1")
     run_number = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     resume = False
 
-    #save_period = 1 if checkpoint_reload else -1
-    save_period = -1 # I think save_period is unnecessary for preemption, but here JIC. I think last.pt always saved.
-
     if checkpoint_reload:
         print("Checking for checkpoint file...")
-        run_dir = os.path.join(project, run_name)
-        checkpoint_file = os.path.join(run_dir, settings['checkpoint_file'])
-        if os.path.exists(checkpoint_file):
-            with open(checkpoint_file, 'r') as file:
+
+        run_dir_path = project_dir_path / run_name
+        checkpoint_file_path = run_dir_path / settings['checkpoint_file']
+        if checkpoint_file_path.is_file():
+            with open(checkpoint_file_path, 'r') as file:
                 checkpoint_settings = yaml.safe_load(file)
                 run_number = checkpoint_settings['run_number']
                 if run_number is None:
-                    raise ValueError(f"Checkpoint file {checkpoint_file} exists but does not contain a run number.")
+                    raise ValueError(f"Checkpoint file {checkpoint_file_path} exists but does not contain a run number.")
 
-                last_path = os.path.join(project, run_name, run_number, 'weights', 'last.pt')
-                if os.path.exists(last_path):
-                    weights_path = last_path
+                last_epoch_weights_path = project_dir_path / run_name / run_number / 'weights/last.pt'
+                if last_epoch_weights_path.is_file():
+                    weights_path = last_epoch_weights_path
                     resume = True
                 else:
-                    print(f"Checkpoint file indicated {last_path}, but weights file not found. Starting training with {weights_path} instead.")
+                    print(f"Checkpoint file indicated {last_epoch_weights_path}, but weights file not found. Starting training with {weights_path} instead.")
                 print(f"Loaded checkpoint file, resuming training under run number {run_number}")
         else:
-            os.makedirs(run_dir, exist_ok=True)
-            with open(checkpoint_file, 'w') as file:
+            run_dir_path.mkdir(parents=True, exist_ok=True)
+            with open(checkpoint_file_path, 'w') as file:
                 file.write(f"run_number: '{run_number}'\n")
                 print(f"Checkpoint file not found, starting fresh run with run number {run_number}")
 
-    name = f'{run_name}/{run_number}'
+    run_subdirectory = f'{run_name}/{run_number}'
 
     with open(hyp_path, 'r') as file:
         hyp = yaml.safe_load(file)
 
-    data_config = os.path.join(settings['data_config_dir'], data_name) + '.yaml'
+    data_config_path = project_path(f"cfg/data/{data_name}.yaml")
 
-    with open(data_config, 'r') as file:
+    with open(data_config_path, 'r') as file:
         data_settings = yaml.safe_load(file)
 
-    data_path = data_settings['path'].replace('../', '', 1)
+    # Getting around ultralytics' insistence that the dataset path be relative to root/datasets
+    # (which is not how we store them)
+    dataset_path = Path(data_settings['path'].replace('../', '', 1))
 
-    label_folders = [os.path.join(data_path, data_settings[split].replace('images', 'labels')) for split in
-                     ['train', 'val']]
-    new_label_folders = [os.path.join(data_path, data_settings[split].replace('images', 'original_labels'))
-                         for split in ['train', 'val']]
+    label_dir_paths = [dataset_path / data_settings[split].replace('images', 'labels') for split in ['train', 'val']]
+    new_label_dir_paths = [dataset_path / data_settings[split].replace('images', 'original_labels') for split in ['train', 'val']]
 
     print("Processing labels...")
 
-    for label_folder, new_label_folder in zip(label_folders, new_label_folders):
-        process_labels(label_folder, new_label_folder)
+    for label_dir_path, new_label_dir_path in zip(label_dir_paths, new_label_dir_paths):
+        process_labels(label_dir_path, new_label_dir_path)
 
     # Detect the number of available CPU cores
     num_cores = len(psutil.Process().cpu_affinity())
@@ -109,9 +111,8 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     print(f"Training model {run_name} on data {data_name}")
     for attempts in range(1, 4):
         try:
-            results = model.train(data=data_config, project=project, name=name, workers=num_workers,
-                                  cfg=hyp_path, device=device, save_period=save_period, resume=resume,
-                                  exist_ok=True)
+            results = model.train(data=data_config_path, project=project_dir_path, name=run_subdirectory, workers=num_workers,
+                                  cfg=hyp_path, device=device, resume=resume, exist_ok=True)
             break
         except FileNotFoundError as e:
             if attempts >= 3:
@@ -123,25 +124,24 @@ def train_detector(data_name, run_name, hyp_path, weights_path, checkpoint_reloa
     print(f"Training completed in {timeit.default_timer() - now} seconds using {num_workers} workers")
 
     # Check for downloaded .pt files and move them out of the current directory
-    amp_check_models_dir = settings['amp_check_models_dir']
-    for pt_file in glob.glob("*.pt"):
-        if not os.path.islink(pt_file):
-            new_path = os.path.join(amp_check_models_dir, pt_file)
+    for pt_file in Path('.').glob("*.pt"):
+        if not pt_file.is_symlink():
+            new_path = storage_path(f"{settings['amp_check_models_dir']}/{pt_file}")
             shutil.move(pt_file, new_path)
-            os.symlink(new_path, pt_file)
+            pt_file.symlink_to(new_path)
 
-def process_labels(label_folder, new_label_folder):
+def process_labels(label_dir_path, new_label_dir_path):
     """
     Move label files with class IDs other than 0 to a new folder and save a copy with class ID 0 in the original folder.
     """
-    if not os.path.exists(new_label_folder):
-        os.makedirs(new_label_folder)
+    if not new_label_dir_path.is_dir():
+        new_label_dir_path.mkdir(parents=True)
 
-    for root, _, files in os.walk(label_folder):
-        for file in files:
-            if file.endswith('.txt'):
-                label_file_path = str(os.path.join(root, file))
-                new_label_file_path = str(os.path.join(new_label_folder, file))
+    for dir_path, _, filenames in label_dir_path.walk():
+        for filename in filenames:
+            if filename.endswith('.txt'):
+                label_file_path = dir_path / filename
+                new_label_file_path = new_label_dir_path / filename
                 for i in range(1,4):
                     try:
                         with open(label_file_path, 'r') as f:

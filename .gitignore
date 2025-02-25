@@ -2,3 +2,4 @@
 yolo*.pt
 src/.ipynb*
 cfg/trackers/evolved/*
+usr/user_settings.yaml
