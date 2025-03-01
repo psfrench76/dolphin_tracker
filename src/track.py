@@ -153,7 +153,30 @@ class DolphinTracker:
                     'Width_m', 'Height_m', 'CenterX_m', 'CenterY_m', 'Altitude_m', 'GSD_cmpx'
                 ])
             researcher_df = pd.DataFrame(researcher_data, columns=columns)
+            self.add_custom_researcher_columns(researcher_df)
             researcher_df.to_csv(self.researcher_output_path, index=False)
+
+    def add_custom_researcher_columns(self, researcher_df):
+        # Calculate the count of individuals in the frame
+            # There is only one count of individuals in the frame, and it's reflected in the number of rows per frame_id.
+            # Simple enough to add as a column in the researcher output.
+
+        # Calculate the distance between each pair of individuals
+            # This results in dimensional expansion. Perhaps best as an array within a cell?
+
+        # Calculate the furthest distance between any two individuals
+            # This results in a single value per frame_id
+
+
+# NOT READY: waiting on features or explanations
+
+        # Calculate the orientation of each individual relative to each other
+            # This results in dimensional expansion. Also relies on orientations (to be developed).
+
+        # Calculate the interval of appearance on the surface
+            # Needs more detail -- is this per individual? Distances between dives between individuals? Dimensionality?
+
+        pass
 
     def save_ground_truth(self, label_dir_path):
         files = list(label_dir_path.glob('*.txt'))
