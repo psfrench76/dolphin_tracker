@@ -7,6 +7,7 @@ import re
 import torch
 import yaml
 import cv2
+import pysrt
 from pathlib import Path
 from shapely.geometry import box as shape_box
 
@@ -25,8 +26,9 @@ else:
 @click.option('--tracker', help="Tracker config file")
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
-def main(dataset, model, output, tracker, botsort, nopersist):
-    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist)
+@click.option('--srt', help="Path to an SRT file corresponding to the video input.")
+def main(dataset, model, output, tracker, botsort, nopersist, srt):
+    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt)
 
 
 class DolphinTracker:
@@ -39,6 +41,7 @@ class DolphinTracker:
 
         self.botsort = botsort
         self.nopersist = nopersist
+        self.last_img_height = None
 
         if tracker_path is None or tracker_path == "Default":
             self.tracker_path = project_path(settings['ultralytics_bytetrack'])
@@ -72,12 +75,11 @@ class DolphinTracker:
         else:
             self.iou = 0.7
 
-    def track_from_images(self, image_dir_path, camera_df=None):
-        results = self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
+    def track_from_images(self, image_dir_path):
+        return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
                                             persist=(not self.nopersist), iou=self.iou, stream=True)
-        self.save_tracker_results(image_dir_path, results, camera_df)
 
-    def save_tracker_results(self, image_dir_path, results, camera_df=None):
+    def save_tracker_results(self, image_dir_path, results, srt_path=None):
         files = list(image_dir_path.glob('*.jpg'))
         files.sort()
         pattern = r"(\d+)(?=[._](jpg))"
@@ -87,66 +89,71 @@ class DolphinTracker:
             raise ValueError(f"Could not read image file {files[0]}")
 
         img_height, img_width = first_image.shape[:2]
+        self.last_img_height = img_height
 
-        with open(self.results_file_path, 'w') as f:
-            if self.researcher_output_path:
-                rf = open(self.researcher_output_path, 'w')
-                rf.write(
-                    f'FrameID,ObjectID,Point1X_px,Point1Y_px,Point2X_px,Point2Y_px,Width_px,Height_px,CenterX_px,CenterY_px')
-                if camera_df is not None:
-                    rf.write(
-                        ',Point1X_m,Point1Y_m,Point2X_m,Point2Y_m,Width_m,Height_m,CenterX_m,CenterY_m,Altitude_m,GSD_cmpx')
-                rf.write('\n')
+        camera_df = self.load_srt_altitudes(srt_path) if srt_path else None
 
-            for i, result in enumerate(results):
-                match = re.search(pattern, str(files[i]))
-                frame_id = match.group(1)
-                if camera_df is not None:
-                    if i < len(camera_df):
-                        camera_row = camera_df.iloc[i]
-                    else:
-                        camera_df = None
-                        print(f"------------------------------------------\n"
-                              f"Warning: Ran out of rows in SRT file at frame index {i + 1} (frame ID {frame_id}).\n"
-                              f"Will use altitude and focal length from the last available row for the remaining frames.\n")
-                for box in result.boxes:
-                    if box.id:
-                        bbox = box.xyxyn[0].tolist()
-                        track_id = int(box.id.item())
-                        conf = box.conf.item()
-                        point_a_x, point_a_y, point_b_x, point_b_y = bbox
-                        width = point_b_x - point_a_x
-                        height = point_b_y - point_a_y
-                        center_x = (point_a_x + point_b_x) / 2
-                        center_y = (point_a_y + point_b_y) / 2
-                        f.write(
-                            f'{frame_id},{track_id},{center_x},{center_y},{width},{height},-1,-1,{conf}\n')
-                        if rf:
-                            point_a_x_px = point_a_x * img_width
-                            point_a_y_px = point_a_y * img_height
-                            point_b_x_px = point_b_x * img_width
-                            point_b_y_px = point_b_y * img_height
-                            center_x_px = center_x * img_width
-                            center_y_px = center_y * img_height
-                            width_px = width * img_width
-                            height_px = height * img_height
-                            rf.write(
-                                f'{frame_id},{track_id},{point_a_x_px},{point_a_y_px},'
-                                f'{point_b_x_px},{point_b_y_px},'
-                                f'{width_px},{height_px},'
-                                f'{center_x_px},{center_y_px}')
-                            if camera_df is not None and camera_row is not None:
-                                gsd_mpx = camera_row['GSD_cmpx'] / 100
-                                rf.write(
-                                    f',{point_a_x_px * gsd_mpx},{point_a_y_px * gsd_mpx},'
-                                    f'{point_b_x_px * gsd_mpx},{point_b_y_px * gsd_mpx},'
-                                    f'{width_px * gsd_mpx},{height_px * gsd_mpx},'
-                                    f'{center_x_px * gsd_mpx},{center_y_px * gsd_mpx},'
-                                    f'{camera_row["est_alt_m"]},{camera_row["GSD_cmpx"]}')
-                            rf.write('\n')
+        data = []
+        researcher_data = []
 
-            if rf:
-                rf.close()
+        for i, result in enumerate(results):
+            match = re.search(pattern, str(files[i]))
+            frame_id = match.group(1)
+            if camera_df is not None:
+                if i < len(camera_df):
+                    camera_row = camera_df.iloc[i]
+                else:
+                    print(f"Warning: Ran out of rows in SRT file at frame index {i + 1} (frame ID {frame_id})."
+                          f"Will use altitude and focal length from the last available row for the remaining frames.")
+            for box in result.boxes:
+                if box.id:
+                    bbox = box.xyxyn[0].tolist()
+                    track_id = int(box.id.item())
+                    conf = box.conf.item()
+                    point_a_x, point_a_y, point_b_x, point_b_y = bbox
+                    width = point_b_x - point_a_x
+                    height = point_b_y - point_a_y
+                    center_x = (point_a_x + point_b_x) / 2
+                    center_y = (point_a_y + point_b_y) / 2
+                    data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
+
+                    point_a_x_px = point_a_x * img_width
+                    point_a_y_px = point_a_y * img_height
+                    point_b_x_px = point_b_x * img_width
+                    point_b_y_px = point_b_y * img_height
+                    center_x_px = center_x * img_width
+                    center_y_px = center_y * img_height
+                    width_px = width * img_width
+                    height_px = height * img_height
+                    researcher_data.append([
+                        frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px,
+                        width_px, height_px, center_x_px, center_y_px
+                    ])
+                    if camera_df is not None and camera_row is not None:
+                        gsd_mpx = camera_row['GSD_cmpx'] / 100
+                        researcher_data[-1].extend([
+                            point_a_x_px * gsd_mpx, point_a_y_px * gsd_mpx, point_b_x_px * gsd_mpx,
+                            point_b_y_px * gsd_mpx, width_px * gsd_mpx, height_px * gsd_mpx,
+                            center_x_px * gsd_mpx, center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]
+                        ])
+
+        df = pd.DataFrame(data, columns=[
+            'FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2', 'Confidence'
+        ])
+        df.to_csv(self.results_file_path, index=False, header=False)
+
+        if researcher_data:
+            columns = [
+                'FrameID', 'ObjectID', 'Point1X_px', 'Point1Y_px', 'Point2X_px', 'Point2Y_px',
+                'Width_px', 'Height_px', 'CenterX_px', 'CenterY_px'
+            ]
+            if camera_df is not None:
+                columns.extend([
+                    'Point1X_m', 'Point1Y_m', 'Point2X_m', 'Point2Y_m',
+                    'Width_m', 'Height_m', 'CenterX_m', 'CenterY_m', 'Altitude_m', 'GSD_cmpx'
+                ])
+            researcher_df = pd.DataFrame(researcher_data, columns=columns)
+            researcher_df.to_csv(self.researcher_output_path, index=False)
 
     def save_ground_truth(self, label_dir_path):
         files = list(label_dir_path.glob('*.txt'))
@@ -254,18 +261,53 @@ class DolphinTracker:
             print(
                 f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics calculations.")
 
+    def load_srt_altitudes(self, srt_path):
+        srt = pysrt.open(srt_path)
+        altitudes = []
+        frame_indexes = []
+        focal_lengths = []
+        rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
+        focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
+
+        for sub in srt:
+            rel_alt_match = re.search(rel_alt_pattern, sub.text)
+            focal_len_match = re.search(focal_len_pattern, sub.text)
+
+            if rel_alt_match and focal_len_match:
+                altitudes.append(float(rel_alt_match.group(1)))
+                focal_lengths.append(float(focal_len_match.group(1)) / 100)
+                frame_indexes.append(sub.index)
+            else:
+                raise ValueError(
+                    f"Could not find relative altitude or focal length in frame {sub.index} subtitle: {sub.text}")
+
+        df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_mm': focal_lengths})
+        df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
+
+        df['GSD_cmpx'] = (df['est_alt_m'] * 100 * settings['drone_sensor_height_mm']) / (
+                    df['focal_len_mm'] * self.last_img_height)
+        print(
+            f"\nSRT data for first frame: GSD: {df['GSD_cmpx'][0]} cm/px. Image height: {self.last_img_height} px. Focal length: {df['focal_len_mm'][0]} mm. "
+            f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} mm.")
+        print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
+
+        print(df)
+        print(df.iloc[2])
+        return df
 
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
-                                nopersist=False, camera_df=None):
+                                nopersist=False, camera_df=None, srt_path=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
+    srt_path = Path(srt_path) if srt_path else None
 
     image_dir_path = dataset_path / settings['images_dir']
     label_dir_path = dataset_path / settings['labels_dir']
 
     tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
-    tracker.track_from_images(image_dir_path, camera_df)
+    results = tracker.track_from_images(image_dir_path)
+    tracker.save_tracker_results(image_dir_path, results, srt_path)
     metrics = tracker.evaluate(label_dir_path)
 
     return metrics

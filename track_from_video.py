@@ -97,10 +97,6 @@ def main():
             raise FileNotFoundError(f"SRT file not found at {srt_path}")
 
         print(f"Using SRT file at {srt_path}")
-        frame_altitude_df = load_srt_altitudes(srt_path, image_height)
-    else:
-        frame_altitude_df = None
-
 
     output_dir_path = storage_path(f"output/tracker/{input_name}")
     output_dir_path.mkdir(parents=True, exist_ok=True)
@@ -117,7 +113,7 @@ def main():
 
     output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
 
-    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, camera_df=frame_altitude_df)
+    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, srt_path=srt_path)
 
     summary_log += f"Tracking and evaluation complete. CSV results can be found in " \
                    f"{output_dir_path / output_filename}\n"
@@ -149,38 +145,6 @@ def main():
         summary_log += f"Ground truth video output written to {video_path}\n"
 
     print(summary_log)
-
-def load_srt_altitudes(srt_path, image_height_px):
-    srt = pysrt.open(srt_path)
-    altitudes = []
-    frame_indexes = []
-    focal_lengths = []
-    rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
-    focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
-
-    for sub in srt:
-        rel_alt_match = re.search(rel_alt_pattern, sub.text)
-        focal_len_match = re.search(focal_len_pattern, sub.text)
-
-        if rel_alt_match and focal_len_match:
-            altitudes.append(float(rel_alt_match.group(1)))
-            focal_lengths.append(float(focal_len_match.group(1)) / 100)
-            frame_indexes.append(sub.index)
-        else:
-            raise ValueError(
-                f"Could not find relative altitude or focal length in frame {sub.index} subtitle: {sub.text}")
-
-    df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_mm': focal_lengths})
-    df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
-
-    df['GSD_cmpx'] = (df['est_alt_m'] * 100 * settings['drone_sensor_height_mm']) / (df['focal_len_mm'] * image_height_px)
-    print(f"\nSRT data for first frame: GSD: {df['GSD_cmpx'][0]} cm/px. Image height: {image_height_px} px. Focal length: {df['focal_len_mm'][0]} mm. "
-          f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} mm.")
-    print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
-
-    print(df)
-    print(df.iloc[2])
-    return df
 
 if __name__ == '__main__':
     main()
