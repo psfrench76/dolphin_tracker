@@ -174,13 +174,37 @@ class DolphinTracker:
         # Calculate the count of individuals in the frame
             # There is only one count of individuals in the frame, and it's reflected in the number of rows per frame_id.
             # Simple enough to add as a column in the researcher output.
+        researcher_df['IndividualCount'] = researcher_df.groupby('FrameID')['ObjectID'].transform('count')
 
         # Calculate the distance between each pair of individuals
             # This results in dimensional expansion. Perhaps best as an array within a cell?
 
+        distances = []
+        if 'GSD_cmpx' in researcher_df:
+            center_x_col = 'CenterX_m'
+            center_y_col = 'CenterY_m'
+            distance_col = 'Distances_m'
+            max_col = 'MaxDistance_m'
+        else:
+            center_x_col = 'CenterX_px'
+            center_y_col = 'CenterY_px'
+            distance_col = 'Distances_px'
+            max_col = 'MaxDistance_px'
+
+        for frame_id, group in researcher_df.groupby('FrameID'):
+            centers = group[[center_x_col, center_y_col]].values
+            object_ids = group['ObjectID'].values
+            dist_matrix = np.linalg.norm(centers[:, np.newaxis] - centers, axis=2)
+            for i in range(len(group)):
+                dist_dict = {object_ids[j]: dist_matrix[i, j] for j in range(len(group)) if i != j}
+                distances.append(dist_dict)
+
+        researcher_df[distance_col] = distances
+
         # Calculate the furthest distance between any two individuals
             # This results in a single value per frame_id
-
+        researcher_df[max_col] = researcher_df.groupby('FrameID')[distance_col].transform(
+            lambda x: max((max(d.values()) for d in x if d), default=0))
 
 # NOT READY: waiting on features or explanations
 
@@ -371,7 +395,7 @@ class DolphinTracker:
                     raise ValueError(
                         "crop_factor must be provided in the drone profile for sensor-mode GSD calculation.")
 
-                if 'focal_length_raw' not in df:
+                if 'focal_len_raw' not in df:
                     raise ValueError(
                         "focal length must be provided in the SRT file for sensor-mode GSD calculation. Did you forget"
                         " to specify the srt file? If you do not have one, use the --altitude argument to specify"

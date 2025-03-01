@@ -1,7 +1,7 @@
 # Default configurations for tracking and video generation
 default_detector: 'saves/pretrained/e31_detector.pt'
 default_tracker: 'cfg/trackers/tuning/exp31/best_tracker.yaml'
-default_drone_profile: 'dji_mini_3_pro' # The default drone profile to use. Configurations located in drone_profile_dir
+default_drone_profile: 'dji_phantom_4_pro_v2' # The default drone profile to use. Configurations located in drone_profile_dir
 default_video_resize_ratio: 0.25
 estimated_drone_starting_altitude_m: 2.25 # meters
 drone_sensor_height_mm: 8 # millimeters
