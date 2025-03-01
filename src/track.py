@@ -27,8 +27,9 @@ else:
 @click.option('--botsort', is_flag=True, help="Enable BotSort parameter.")
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
 @click.option('--srt', help="Path to an SRT file corresponding to the video input.")
-def main(dataset, model, output, tracker, botsort, nopersist, srt):
-    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt)
+@click.option('--drone', help="Drone profile for GSD calculation.")
+def main(dataset, model, output, tracker, botsort, nopersist, srt, drone):
+    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt, drone_profile=drone)
 
 
 class DolphinTracker:
@@ -79,7 +80,7 @@ class DolphinTracker:
         return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
                                             persist=(not self.nopersist), iou=self.iou, stream=True)
 
-    def save_tracker_results(self, image_dir_path, results, srt_path=None):
+    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None):
         files = list(image_dir_path.glob('*.jpg'))
         files.sort()
         pattern = r"(\d+)(?=[._](jpg))"
@@ -91,7 +92,7 @@ class DolphinTracker:
         img_height, img_width = first_image.shape[:2]
         self.last_img_height = img_height
 
-        camera_df = self.load_srt_altitudes(srt_path) if srt_path else None
+        camera_df = self.load_srt_altitudes(srt_path, drone_profile) if srt_path else None
 
         data = []
         researcher_data = []
@@ -141,6 +142,7 @@ class DolphinTracker:
             'FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2', 'Confidence'
         ])
         df.to_csv(self.results_file_path, index=False, header=False)
+        print(f"Wrote raw results to {self.results_file_path}")
 
         if researcher_data:
             columns = [
@@ -155,6 +157,7 @@ class DolphinTracker:
             researcher_df = pd.DataFrame(researcher_data, columns=columns)
             self.add_custom_researcher_columns(researcher_df)
             researcher_df.to_csv(self.researcher_output_path, index=False)
+            print(f"Wrote researcher output data to {self.researcher_output_path}")
 
     def add_custom_researcher_columns(self, researcher_df):
         # Calculate the count of individuals in the frame
@@ -284,13 +287,14 @@ class DolphinTracker:
             print(
                 f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics calculations.")
 
-    def load_srt_altitudes(self, srt_path):
+    def load_srt_altitudes(self, srt_path, drone_profile):
         srt = pysrt.open(srt_path)
         altitudes = []
         frame_indexes = []
         focal_lengths = []
         rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
         focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
+        drone_profile = drone_profile or settings['default_drone_profile']
 
         for sub in srt:
             rel_alt_match = re.search(rel_alt_pattern, sub.text)
@@ -298,28 +302,94 @@ class DolphinTracker:
 
             if rel_alt_match and focal_len_match:
                 altitudes.append(float(rel_alt_match.group(1)))
-                focal_lengths.append(float(focal_len_match.group(1)) / 100)
+                focal_lengths.append(float(focal_len_match.group(1)))
                 frame_indexes.append(sub.index)
             else:
                 raise ValueError(
                     f"Could not find relative altitude or focal length in frame {sub.index} subtitle: {sub.text}")
 
-        df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_mm': focal_lengths})
+        df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_raw': focal_lengths})
         df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
 
-        df['GSD_cmpx'] = (df['est_alt_m'] * 100 * settings['drone_sensor_height_mm']) / (
-                    df['focal_len_mm'] * self.last_img_height)
-        print(
-            f"\nSRT data for first frame: GSD: {df['GSD_cmpx'][0]} cm/px. Image height: {self.last_img_height} px. Focal length: {df['focal_len_mm'][0]} mm. "
-            f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} mm.")
-        print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
+        self.calculate_gsd(df, drone_profile)
 
         print(df)
         print(df.iloc[2])
         return df
 
+    def calculate_gsd(self, df, drone_profile):
+        drone_profile_path = project_path(settings['drone_profile_dir']) / f"{drone_profile}.yaml"
+        with open(drone_profile_path, 'r') as file:
+            drone_settings = yaml.safe_load(file)
+
+        if drone_settings['gsd_calculation_mode'] == 'fov':
+            # For 90 deg overhead videos:
+            # tan(fov/2) = (field_height_m/2) / altitude_m
+            # field_height_m = 2 * altitude_m * tan(fov/2)
+            # GSD_mpx = field_height_m / image_height_px
+            # GSD_cmpx = GSD_mpx * 100
+            if 'camera_vertical_fov_deg' in drone_settings:
+                df['GSD_cmpx'] = 100 * (2 * df['est_alt_m'] *
+                                        np.tan(np.radians(drone_settings['camera_vertical_fov_deg'] / 2))) / self.last_img_height
+            else:
+                raise ValueError(
+                    "camera_vertical_fov_deg must be provided in the drone profile for fov-mode GSD calculation")
+
+            print(
+                f"\nSRT data for first frame before calibration factor: GSD: {df['GSD_cmpx'][0]} cm/px. "
+                f"Image height: {self.last_img_height} px. "
+                f"Estimated altitude: {df['est_alt_m'][0]} m. Camera vertical FOV: {drone_settings['camera_vertical_fov_deg']} deg.")
+            print(
+                f"\nFormula for GSD: 100 * (2 * estimated altitude * tan(vertical FOV/2)) / image height")
+
+        elif drone_settings['gsd_calculation_mode'] == 'sensor' or drone_settings['gsd_calculation_mode'] == 'focal':
+            if 'sensor_height_mm' in drone_settings:
+                sensor_height = drone_settings['sensor_height_mm']
+            else:
+                raise ValueError(
+                    "sensor_height_mm must be provided in the drone profile for sensor-mode or focal-mode GSD calculation.")
+
+            if drone_settings['gsd_calculation_mode'] == 'sensor':
+                if 'focal_length_multiplier' in drone_settings:
+                    focal_length_multiplier = drone_settings['focal_length_multiplier']
+                else:
+                    raise ValueError(
+                        "focal_length_multiplier must be provided in the drone profile for sensor-mode GSD calculation.")
+
+                if 'crop_factor' in drone_settings:
+                    crop_factor = drone_settings['crop_factor']
+                else:
+                    raise ValueError(
+                        "crop_factor must be provided in the drone profile for sensor-mode GSD calculation.")
+
+                df['focal_len_mm'] = df['focal_len_raw'] * focal_length_multiplier / crop_factor
+            else:
+                if 'focal_length_mm' in drone_settings:
+                    df['focal_len_mm'] = drone_settings['focal_length_mm']
+                else:
+                    raise ValueError(
+                        "focal_length_mm must be provided in the drone profile for focal-mode GSD calculation.")
+
+            df['GSD_cmpx'] = (df['est_alt_m'] * 100 * sensor_height) / (
+                    df['focal_len_mm'] * self.last_img_height)
+            print(
+                f"\nSRT data for first frame before calibration factor: GSD: {df['GSD_cmpx'][0]} cm/px. "
+                f"Image height: {self.last_img_height} px. "
+                f"Focal length: {df['focal_len_mm'][0]} mm. "
+                f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} mm.")
+            print(
+                f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
+
+        else:
+            raise ValueError(f"Invalid GSD calculation mode: {drone_settings['gsd_calculation_mode']}")
+
+        if 'manual_calibration_factor' in drone_settings:
+            df['GSD_cmpx'] *= drone_settings['manual_calibration_factor']
+            print(f"Applied manual calibration factor of {drone_settings['manual_calibration_factor']}")
+
+
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
-                                nopersist=False, camera_df=None, srt_path=None):
+                                nopersist=False, camera_df=None, srt_path=None, drone_profile=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -330,7 +400,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
 
     tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
     results = tracker.track_from_images(image_dir_path)
-    tracker.save_tracker_results(image_dir_path, results, srt_path)
+    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile)
     metrics = tracker.evaluate(label_dir_path)
 
     return metrics
