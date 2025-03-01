@@ -28,8 +28,10 @@ else:
 @click.option('--nopersist', is_flag=True, help="Disable persistence in tracking.")
 @click.option('--srt', help="Path to an SRT file corresponding to the video input.")
 @click.option('--drone', help="Drone profile for GSD calculation.")
-def main(dataset, model, output, tracker, botsort, nopersist, srt, drone):
-    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt, drone_profile=drone)
+@click.option('--altitude', help="Manual altitude in meters for GSD calculation. Overrides SRT altitude if present.")
+def main(dataset, model, output, tracker, botsort, nopersist, srt, drone, altitude):
+    results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt,
+                                          drone_profile=drone, manual_altitude=altitude)
 
 
 class DolphinTracker:
@@ -80,7 +82,7 @@ class DolphinTracker:
         return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
                                             persist=(not self.nopersist), iou=self.iou, stream=True)
 
-    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None):
+    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None, manual_altitude=None):
         files = list(image_dir_path.glob('*.jpg'))
         files.sort()
         pattern = r"(\d+)(?=[._](jpg))"
@@ -92,7 +94,16 @@ class DolphinTracker:
         img_height, img_width = first_image.shape[:2]
         self.last_img_height = img_height
 
-        camera_df = self.load_srt_altitudes(srt_path, drone_profile) if srt_path else None
+        camera_df = self.load_srt_altitudes(srt_path) if srt_path else None
+
+        drone_profile = drone_profile or settings['default_drone_profile']
+        if manual_altitude:
+            if camera_df is None:
+                camera_df = pd.DataFrame(index=range(len(files)))
+            self.load_manual_altitudes(camera_df, float(manual_altitude))
+
+        if camera_df is not None:
+            self.calculate_gsd(camera_df, drone_profile)
 
         data = []
         researcher_data = []
@@ -287,14 +298,16 @@ class DolphinTracker:
             print(
                 f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics calculations.")
 
-    def load_srt_altitudes(self, srt_path, drone_profile):
+    def load_manual_altitudes(self, camera_df, manual_altitude):
+        camera_df['est_alt_m'] = manual_altitude
+
+    def load_srt_altitudes(self, srt_path):
         srt = pysrt.open(srt_path)
         altitudes = []
         frame_indexes = []
         focal_lengths = []
         rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
         focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
-        drone_profile = drone_profile or settings['default_drone_profile']
 
         for sub in srt:
             rel_alt_match = re.search(rel_alt_pattern, sub.text)
@@ -311,10 +324,6 @@ class DolphinTracker:
         df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_raw': focal_lengths})
         df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
 
-        self.calculate_gsd(df, drone_profile)
-
-        print(df)
-        print(df.iloc[2])
         return df
 
     def calculate_gsd(self, df, drone_profile):
@@ -362,6 +371,12 @@ class DolphinTracker:
                     raise ValueError(
                         "crop_factor must be provided in the drone profile for sensor-mode GSD calculation.")
 
+                if 'focal_length_raw' not in df:
+                    raise ValueError(
+                        "focal length must be provided in the SRT file for sensor-mode GSD calculation. Did you forget"
+                        " to specify the srt file? If you do not have one, use the --altitude argument to specify"
+                        " the altitude manually, and use 'fov' or 'focal' as the GSD calculation mode in the drone profile.")
+
                 df['focal_len_mm'] = df['focal_len_raw'] * focal_length_multiplier / crop_factor
             else:
                 if 'focal_length_mm' in drone_settings:
@@ -389,7 +404,7 @@ class DolphinTracker:
 
 
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
-                                nopersist=False, camera_df=None, srt_path=None, drone_profile=None):
+                                nopersist=False, camera_df=None, srt_path=None, drone_profile=None, manual_altitude=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -400,7 +415,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
 
     tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
     results = tracker.track_from_images(image_dir_path)
-    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile)
+    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude)
     metrics = tracker.evaluate(label_dir_path)
 
     return metrics
