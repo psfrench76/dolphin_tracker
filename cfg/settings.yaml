@@ -12,6 +12,7 @@ amp_check_models_dir: 'saves/pretrained' # Subdirectory of storage_root
 drone_profile_dir: 'cfg/drones' # Subdirectory of project root
 images_dir: 'images' # Subdirectory of all dataset directories
 labels_dir: 'labels' # Subdirectory of all dataset directories
+tracks_dir: 'tracks' # Subdirectory of all dataset directories
 dataset_split_dirs: # Subdirectories of some datasets -- only used for searching and not for saving
   - 'train'
   - 'val'
@@ -39,6 +40,13 @@ ultralytics_botsort: 'cfg/trackers/botsort_default.yaml' # Relative to project r
 # Files for internal use
 tracking_hyp_file: 'tracking_hyperparameters.yaml'
 checkpoint_file: 'checkpoint.yaml'
+
+# Dataset conversion settings (the class names, coming out of labelme, that have been observed as valid dolphins)
+dolphin_classes:
+  - Dolphin
+  - dolphin
+  - box
+  - rectangle
 
 tracking_metrics:
   - mota
