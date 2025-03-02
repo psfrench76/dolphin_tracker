@@ -29,6 +29,6 @@ conda env list
 python -V
 which python
 
-/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python dolphin_tracker/src/track.py --dataset $DATASET --model $MODEL --output $OUTPUT $NOPERSIST $BOTSORT --tracker $TRACKER > "/nfs/hpc/share/frenchp/dolphin-tracker/logs/results/track_$SLURM_JOBID.log"
+/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python src/track.py --dataset $DATASET --model $MODEL --output $OUTPUT $NOPERSIST $BOTSORT --tracker $TRACKER > "/nfs/hpc/share/frenchp/dolphin-tracker/logs/results/track_$SLURM_JOBID.log"
 conda deactivate
 date

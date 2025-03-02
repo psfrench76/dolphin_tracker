@@ -1,0 +1,7 @@
+path: '../../data/balanced1'
+train: 'train/images'
+val: 'val/images' # This is copied from test, but it does not include ambiguous frames (without labels which are not background)
+test: 'test/images'
+
+nc: 1
+names: ['dolphin']
