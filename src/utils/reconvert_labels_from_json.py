@@ -8,7 +8,7 @@ Usage: reconvert_labels_from_json.py <source_dir> <dest_dir> [--oriented_bbox]
 
 import argparse
 from pathlib import Path
-from data_conversion import convert_and_save_label
+from data_conversion import convert_and_save_label, print_run_stats, create_background_tracks_file
 from settings import settings
 
 def index_files(directory):
@@ -24,6 +24,7 @@ def index_files(directory):
 def reconvert_labels_from_json(source_dir, dest_dir, oriented_bbox=False):
     source_path = Path(source_dir)
     dest_path = Path(dest_dir)
+    run_stats = {}
 
     # Sanity check for destination directory
     if dest_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
@@ -38,15 +39,23 @@ def reconvert_labels_from_json(source_dir, dest_dir, oriented_bbox=False):
 
     for text_file in labels_path.glob('*.txt'):
         if text_file.stem in source_files:
-            convert_and_save_label(source_files[text_file.stem], dest_path, oriented_bbox)
+            frame_stats = convert_and_save_label(source_files[text_file.stem], dest_path, oriented_bbox)
             converted_count += 1
+            for key, value in frame_stats.items():
+                if key not in run_stats:
+                    run_stats[key] = {text_file.stem: value}
+                else:
+                    run_stats[key][text_file.stem] = value
         else:
             if text_file.stat().st_size == 0:
                 background_labels_count += 1
+                create_background_tracks_file(text_file)
             else:
                 populated_missing_files.append(text_file.name)
 
-    print(f"Total labels converted: {converted_count}")
+    print_run_stats(run_stats)
+
+    print(f"Total frames converted: {converted_count}")
     print(f"Total background label files without jsons: {background_labels_count}")
     if populated_missing_files:
         print("Labels present in destination dataset but not in source directory:")

@@ -8,12 +8,13 @@ Usage: copy_and_convert_all_labels.py <source_dir> <dest_dir> [--oriented_bbox]
 
 import argparse
 from pathlib import Path
-from data_conversion import convert_and_save_label
+from data_conversion import convert_and_save_label, print_run_stats
 from settings import settings
 
 def copy_and_convert_all_labels(source_dir, dest_dir, oriented_bbox=False):
     source_path = Path(source_dir)
     dest_path = Path(dest_dir)
+    run_stats = {}
 
     # Sanity check for destination directory
     if dest_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
@@ -22,10 +23,16 @@ def copy_and_convert_all_labels(source_dir, dest_dir, oriented_bbox=False):
     converted_count = 0
 
     for json_file in source_path.glob('*.json'):
-        convert_and_save_label(json_file, dest_path, oriented_bbox)
+        frame_stats = convert_and_save_label(json_file, dest_path, oriented_bbox)
         converted_count += 1
+        for key, value in frame_stats.items():
+            if key not in run_stats:
+                run_stats[key] = {json_file.stem: value}
+            else:
+                run_stats[key][json_file.stem] = value
 
-    print(f"Total labels converted: {converted_count}")
+    print_run_stats(run_stats)
+    print(f"Total frames converted: {converted_count}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert all labels from source directory to dataset root directory.")
