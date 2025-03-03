@@ -222,6 +222,9 @@ class DolphinTracker:
 
         data = []
 
+        # Define the tracks directory path
+        tracks_dir_path = label_dir_path.parent / settings['tracks_dir']
+
         # Read and process each file
         for label_path in files:
             pattern = r"(\d+)(?=[._](txt))"
@@ -230,17 +233,25 @@ class DolphinTracker:
                 raise ValueError(f"Could not process filename {label_path}")
 
             frame_id = match.group(1)
+            track_path = tracks_dir_path / label_path.name
+
+            # Load track IDs if the track file exists
+            track_ids = []
+            if track_path.exists():
+                with open(track_path, 'r') as track_file:
+                    track_ids = [line.strip() for line in track_file.readlines()]
 
             with open(label_path, 'r') as f:
                 content = f.read()
                 next_id = 1
                 empty_frame = True
-                for line in content.split("\n"):
+                for i, line in enumerate(content.split("\n")):
                     if line.strip():
-                        # Add frame number as the first element
                         line_data = line.split(" ")
-                        # Replace any box IDs of 0
-                        if line_data[0] == '0' or line_data[0] == 'None':
+                        # Use track ID from track file if available, otherwise use next_id if ID is 0 or None
+                        if track_ids and i < len(track_ids):
+                            line_data[0] = track_ids[i]
+                        elif line_data[0] == '0' or line_data[0] == 'None':
                             line_data[0] = str(next_id)
                             next_id += 1
                         data.append([frame_id] + line_data)

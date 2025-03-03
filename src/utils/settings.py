@@ -4,7 +4,6 @@ from pathlib import Path
 
 project_root = Path(__file__).resolve().parents[2]
 config_file = project_root / 'cfg/settings.yaml'
-print(f"project_root: {project_root}")
 
 
 def project_path(path):

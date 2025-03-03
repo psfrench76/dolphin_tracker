@@ -2,4 +2,6 @@
 yolo*.pt
 src/.ipynb*
 cfg/trackers/evolved/*
+corrections/
 usr/user_settings.yaml
+*.DS_Store
