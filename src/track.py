@@ -225,6 +225,8 @@ class DolphinTracker:
         # Define the tracks directory path
         tracks_dir_path = label_dir_path.parent / settings['tracks_dir']
 
+        zero_ids_warning = False
+
         # Read and process each file
         for label_path in files:
             pattern = r"(\d+)(?=[._](txt))"
@@ -251,9 +253,13 @@ class DolphinTracker:
                         # Use track ID from track file if available, otherwise use next_id if ID is 0 or None
                         if track_ids and i < len(track_ids):
                             line_data[0] = track_ids[i]
+                        # The logic below is only preserved as a vestige for use with older dataset iterations for the sake
+                        # of comparison. It should not be necessary for datasets created after March 3, 2025. If it is,
+                        # you need to reconvert the dataset.
                         elif line_data[0] == '0' or line_data[0] == 'None':
                             line_data[0] = str(next_id)
                             next_id += 1
+                            zero_ids_warning = True
                         data.append([frame_id] + line_data)
                         empty_frame = False
                 if empty_frame:
@@ -268,6 +274,9 @@ class DolphinTracker:
         gt_df['mot15col2'] = -1
         gt_df['mot15col3'] = 1
         gt_df.to_csv(self.gt_file_path, index=False, header=False)
+        if zero_ids_warning:
+            print("Warning: Found 0 or None IDs in ground truth labels. Assigned new IDs. If this is unexpected, "
+                  "check that the track files are correct and present.")
 
     def _iou(self, box1, box2):
         poly1 = shape_box(*box1)
