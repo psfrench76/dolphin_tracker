@@ -25,6 +25,9 @@ dataset_split_dirs: # Subdirectories of some datasets -- only used for searching
   - 'val'
   - 'valid'
   - 'test'
+dataset_train_split: 'train' # Subdirectory of the dataset root
+dataset_valid_split: 'valid' # Subdirectory of the dataset root
+dataset_test_split: 'test' # Subdirectory of the dataset root
 
 # Output file names
 args_file: 'args.yaml' # Arguments file for track_from_video.py
