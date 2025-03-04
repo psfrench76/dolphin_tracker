@@ -15,57 +15,54 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
         raise ValueError("Dataset directory should be the dataset root, not a split directory.")
 
     train_dir_path = dataset_root_path / settings['dataset_train_split']
-    test_dir_path = dataset_root_path / settings['dataset_test_split']
-
-    (train_dir_path / 'images').mkdir(parents=True, exist_ok=True)
-    (train_dir_path / 'labels').mkdir(parents=True, exist_ok=True)
-
-    # Get list of test images
-    test_images = set((test_dir_path / 'images').iterdir())
-
-    # Traverse input folder and find images with corresponding labels
-    train_set = []
-    negative_images = []
-    for image_file in complete_source_dir_path.rglob('*.jpg'):
-        if image_file not in test_images:
-            label_file = image_file.with_suffix('.txt').parent.parent / 'labels' / image_file.with_suffix('.txt').name
-            if label_file.exists():
-                if label_file.stat().st_size == 0:
-                    negative_images.append((image_file, label_file))
-                else:
-                    train_set.append((image_file, label_file))
-
-    # Handle negative examples based on negative_prop
-    if negative_example_fraction < 1:
-        random.shuffle(negative_images)
-        negative_count = int(len(negative_images) * negative_example_fraction)
-        negative_images = negative_images[:negative_count]
-
-    train_set.extend(negative_images)
-
-    # Copy files to train and valid folders
-    for image_path, label_path in train_set:
-        shutil.copy(image_path, train_dir_path / 'images' / image_path.name)
-        shutil.copy(label_path, train_dir_path / 'labels' / label_path.name)
-
-    print(f"Total images processed: {len(train_set)}")
-    print(f"Images copied to train set: {len(train_set)}")
-    print(f"Negative images processed: {len(negative_images)}")
-    print(f"Negative images copied to train set: {len(negative_images)}")
-
-    generate_detector_validation_set(dataset_root_path)
-
-def generate_detector_validation_set(dataset_root_path):
     valid_dir_path = dataset_root_path / settings['dataset_valid_split']
     test_dir_path = dataset_root_path / settings['dataset_test_split']
 
-    test_images_dir_path = test_dir_path / settings['images_dir']
-    test_labels_dir_path = test_dir_path / settings['labels_dir']
+    train_images_dir_path = train_dir_path / settings['images_dir']
+    train_labels_dir_path = train_dir_path / settings['labels_dir']
+
     valid_images_dir_path = valid_dir_path / settings['images_dir']
     valid_labels_dir_path = valid_dir_path / settings['labels_dir']
 
+    test_images_dir_path = test_dir_path / settings['images_dir']
+    test_labels_dir_path = test_dir_path / settings['labels_dir']
+
+    train_images_dir_path.mkdir(parents=True, exist_ok=True)
+    train_labels_dir_path.mkdir(parents=True, exist_ok=True)
+
     valid_images_dir_path.mkdir(parents=True, exist_ok=True)
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
+
+    # Get list of test images
+    test_images = set(test_images_dir_path.iterdir())
+
+    # Traverse complete_source_dir_path and find images with corresponding labels
+    train_set_positive = []
+    train_set_negative = []
+    for image_file in complete_source_dir_path.rglob('*.jpg'):
+        if image_file not in test_images:
+            label_file = image_file.parent.parent / settings['labels_dir'] / image_file.with_suffix('.txt').name
+            if label_file.exists():
+                if label_file.stat().st_size == 0:
+                    train_set_negative.append((image_file, label_file))
+                else:
+                    train_set_positive.append((image_file, label_file))
+
+    # Handle negative examples based on negative_prop
+    if negative_example_fraction < 1:
+        random.shuffle(train_set_negative)
+        negative_count = int(len(train_set_negative) * negative_example_fraction)
+        train_set_negative = train_set_negative[:negative_count]
+
+    train_set_positive.extend(train_set_negative)
+
+    # Copy files to train and valid folders
+    for image_path, label_path in train_set_positive:
+        shutil.copy(image_path, train_dir_path / 'images' / image_path.name)
+        shutil.copy(label_path, train_dir_path / 'labels' / label_path.name)
+
+    print(f"Images copied to train set: {len(train_set_positive)}")
+    print(f"Negative images copied to train set: {len(train_set_negative)}")
 
     copied_images_count = 0
     copied_labels_count = 0
