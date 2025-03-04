@@ -11,6 +11,12 @@ storage_root: '..' # Intended for large data, not code. Either absolute, or rela
 amp_check_models_dir: 'saves/pretrained' # Subdirectory of storage_root
 drone_profile_dir: 'cfg/drones' # Subdirectory of project root
 user_settings_dir: 'usr' # Subdirectory of project root
+detector_runs_dir: 'runs' # Subdirectory of storage root
+logs_dir: 'logs' # Subdirectory of storage root
+log_results_dir: 'results' # Subdirectory of logs_dir
+log_slurm_dir: 'slurm' # Subdirectory of logs_dir
+training_log_prefix: 'train' # Prefix for training log files
+training_runs_dir: 'train/stage1' # Subdirectory of detector_runs_dir
 images_dir: 'images' # Subdirectory of all dataset directories
 labels_dir: 'labels' # Subdirectory of all dataset directories
 tracks_dir: 'tracks' # Subdirectory of all dataset directories
@@ -24,6 +30,9 @@ dataset_split_dirs: # Subdirectories of some datasets -- only used for searching
 args_file: 'args.yaml' # Arguments file for track_from_video.py
 evaluation_results_file: 'evaluation_results.txt' # For eval.py
 evolution_log_file: 'evolutions.yaml'
+
+# Training results files
+training_results_csv: 'results.csv'
 
 # Tracking results files (all of these will have the run name prepended)
 gt_file_suffix: 'gt_formatted.txt'
@@ -49,6 +58,16 @@ dolphin_classes:
   - dolphin
   - box
   - rectangle
+
+# Metrics sets
+training_metrics_to_print:
+  - 'metrics/precision(B)'
+  - 'metrics/recall(B)'
+  - 'metrics/mAP50(B)'
+  - 'metrics/mAP50-95(B)'
+  - 'val/box_loss'
+  - 'val/cls_loss'
+  - 'val/dfl_loss'
 
 tracking_metrics:
   - mota
