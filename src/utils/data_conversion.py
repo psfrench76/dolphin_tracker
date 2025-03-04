@@ -77,7 +77,9 @@ def print_run_stats(run_stats):
                     if v > 0:
                         print(f"  {k}: {v}")
 
-    duplicate_track_ratio = total_duplicate_tracks / (total_unique_labels - total_frames) #ignore frames which only have one label
+    # ignore frames which only have one label -- they can't have duplicate tracks
+    labels_excluding_firsts = total_unique_labels - total_frames
+    duplicate_track_ratio = total_duplicate_tracks / labels_excluding_firsts if labels_excluding_firsts != 0 else 0
     print(f"Total frames: {total_frames}")
     print(f"Total unique labels: {total_unique_labels}")
     print(f"Proportion of duplicate tracks: {duplicate_track_ratio:.2%}")
@@ -93,8 +95,9 @@ def increment_track_file_by_amount(track_file_path, amount):
 
 def create_background_tracks_file(label_file_path):
     label_file_path = Path(label_file_path)
-    track_file_path = Path(str(label_file_path).rsplit(settings['labels_dir'], 1)[0] + settings['tracks_dir'] +
-                           str(label_file_path).rsplit(settings['labels_dir'], 1)[1])
+    track_dir_path = label_file_path.parent
+    track_dir_path.mkdir(exist_ok=True)
+    track_file_path = track_dir_path / f"{label_file_path.stem}.txt"
     track_file_path.touch()
 
 def _load_tracks(track_file_path):
@@ -220,7 +223,7 @@ def _deduplicate_tracks(tracks):
 # default to try to guess the correct track ID rather than defaulting to the highest number. But this has no knowledge
 # about other frames so it's by nature not perfect.
 def _first_unused_track_id(tracks):
-    for i in range(1, len(tracks) + 2): # +2 because range is exclusive and if the tracks are sequential we want to return the next number
+    for i in range(min(tracks), min(tracks) + len(tracks) + 1): # +2 because range is exclusive and if the tracks are sequential we want to return the next number
         if i not in tracks:
             return i
 
