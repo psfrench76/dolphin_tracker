@@ -1,10 +1,37 @@
+"""
+This script generates training and validation sets from a complete source based on a (presumably) hand-built test set.
+
+It generates a validation set by copying only valid image/label pairs from the test set (ignoring images without
+label files).
+
+It generates a training set by copying all image/label pairs from the source (and all subdirectories) EXCEPT those
+images which are present in the test set. It only includes a specified fraction of negative examples.
+
+Usage: generate_training_and_validation_sets.py <complete_source_dir_path> <dataset_root_path>
+<negative_example_fraction>
+
+Args:
+complete_source_dir_path (Path): Path to the complete source directory. This directory should contain images and
+labels for all examples, preprocessed and converted into yolo format. It should also be cleaned, having bad
+filenames, duplicate labels, etc. removed.
+
+dataset_root_path (Path): Path to the dataset root directory we are creating. This should already have a test set (
+folder settings['dataset_test_split']) with images and labels.
+
+negative_example_fraction (float): Proportion of negative examples to use when generating training set. This is to
+cut down on training set size, since negative examples are very common in the dataset and including all of them
+doesn't have a lot of value.
+"""
+
 import argparse
 import shutil
 import random
 from pathlib import Path
 from inc.settings import settings
 
-def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, negative_example_fraction):
+
+# Generate training and validation sets from COMPLETE_SOURCE_DIR_PATH and DATASET_ROOT_PATH.
+def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, negative_example_fraction):
     if not (0 <= negative_example_fraction <= 1):
         raise ValueError("Negative example fraction must be between 0 and 1")
 
@@ -14,6 +41,7 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
     if dataset_root_path.name in settings['dataset_split_dirs']:
         raise ValueError("Dataset directory should be the dataset root, not a split directory.")
 
+    # Build all the paths, make directories as needed
     train_dir_path = dataset_root_path / settings['dataset_train_split']
     valid_dir_path = dataset_root_path / settings['dataset_valid_split']
     test_dir_path = dataset_root_path / settings['dataset_test_split']
@@ -33,7 +61,6 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
     valid_images_dir_path.mkdir(parents=True, exist_ok=True)
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
 
-    # Get list of test images
     test_images = set(test_images_dir_path.glob('*.jpg'))
 
     train_set = []
@@ -51,14 +78,16 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
                 else:
                     train_set.append((image_file, label_file))
 
-    # Handle negative examples based on negative_prop
+    # Handle negative examples based on negative_example_fraction
     if negative_example_fraction < 1:
         random.shuffle(train_set_negative)
         negative_count = int(len(train_set_negative) * negative_example_fraction)
         train_set_negative = train_set_negative[:negative_count]
 
+    # Combine positive and negative training examples
     train_set.extend(train_set_negative)
 
+    # Build validation set, a copy of test set but only examples with labels
     for image_file in test_images:
         label_file = test_labels_dir_path / (image_file.stem + '.txt')
         if label_file.exists():
@@ -80,11 +109,15 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
     print(f"Images and labels copied from test to validation set: {len(valid_set)}")
     print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}")
 
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Generate train and valid sets from input folders based on given proportions.")
-    parser.add_argument('dataset_root_path', type=Path, help='Path to the dataset root directory we are creating')
+    parser = argparse.ArgumentParser(
+        description="Generate train and valid sets from input folders based on given proportions.")
     parser.add_argument('complete_source_dir_path', type=Path, help='Path to the complete source directory')
-    parser.add_argument('negative_example_fraction', type=float, help='Proportion of negative examples to use when generating training set')
+    parser.add_argument('dataset_root_path', type=Path, help='Path to the dataset root directory we are creating')
+    parser.add_argument('negative_example_fraction', default=1.0, type=float,
+                        help='Proportion of negative examples to use when generating training set')
     args = parser.parse_args()
 
-    generate_train_and_valid_sets(args.dataset_root_path, args.complete_source_dir_path, args.negative_example_fraction)
+    _generate_train_and_valid_sets(args.complete_source_dir_path, args.dataset_root_path,
+                                   args.negative_example_fraction)
