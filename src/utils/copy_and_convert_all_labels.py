@@ -1,9 +1,8 @@
 """
 This script converts all label files present in the source directory itself (not any subdirectories)
 and saves them to the destination directory. It uses the convert_and_save_label function from data_conversion.py.
-Blank labels are no longer tracked.
 
-Usage: copy_and_convert_all_labels.py <source_dir> <dest_dir> [--oriented_bbox]
+Usage: copy_and_convert_all_labels.py <json_source_dir> <dataset_root_dr> [--oriented_bbox]
 """
 
 import argparse
@@ -11,19 +10,22 @@ from pathlib import Path
 from inc.data_conversion import convert_and_save_label, print_run_stats
 from inc.settings import settings
 
-def copy_and_convert_all_labels(source_dir, dest_dir, oriented_bbox=False):
-    source_path = Path(source_dir)
-    dest_path = Path(dest_dir)
+
+# Copies and converts all labels present in the source directory (a directory containing json files) to the
+# destination dataset, in a labels subdirectory, in yolo format.
+def copy_and_convert_all_labels(json_source_dir, dataset_root_dr, oriented_bbox=False):
+    json_source_path = Path(json_source_dir)
+    dataset_root_path = Path(dataset_root_dr)
     run_stats = {}
 
     # Sanity check for destination directory
-    if dest_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
+    if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Destination directory should be the dataset root, not images, labels, or tracks directory.")
 
     converted_count = 0
 
-    for json_file in source_path.glob('*.json'):
-        frame_stats = convert_and_save_label(json_file, dest_path, oriented_bbox)
+    for json_file in json_source_path.glob('*.json'):
+        frame_stats = convert_and_save_label(json_file, dataset_root_path, oriented_bbox)
         converted_count += 1
         for key, value in frame_stats.items():
             if key not in run_stats:
@@ -34,11 +36,12 @@ def copy_and_convert_all_labels(source_dir, dest_dir, oriented_bbox=False):
     print_run_stats(run_stats)
     print(f"Total frames converted: {converted_count}")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert all labels from source directory to dataset root directory.")
-    parser.add_argument('source_dir', type=str, help='Path to the source directory')
-    parser.add_argument('dest_dir', type=str, help='Path to the dataset root directory')
+    parser.add_argument('json_source_dir', type=str, help='Path to the source directory')
+    parser.add_argument('dataset_root_dr', type=str, help='Path to the dataset root directory')
     parser.add_argument('--oriented_bbox', action='store_true', help='Convert to oriented bounding box format')
     args = parser.parse_args()
 
-    copy_and_convert_all_labels(args.source_dir, args.dest_dir, args.oriented_bbox)
+    copy_and_convert_all_labels(args.json_source_dir, args.dataset_root_dr, args.oriented_bbox)

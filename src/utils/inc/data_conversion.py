@@ -2,14 +2,29 @@ from .settings import settings
 from pathlib import Path
 import json
 
+"""
+This file holds the core functionality of the dataset conversion toolset. It is designed to be used as a module
+by other scripts, and is not intended to be run directly. See the function comments for descriptions of functionality.
+"""
 
+
+# This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
+# to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
+# dataset directory. It also saves the track IDs to the tracks directory in the dataset directory.
+
+# json_file_path: The path to the JSON file to be converted
+# dataset_dir_path: The path to the directory where the labels and tracks directories are located (the dataset root)
+# oriented_bbox: A boolean flag indicating whether the labels should be converted to oriented bounding box format.
+
+# Returns a dictionary of statistics about the conversion process, which can be used by calling scripts, aggregated, and
+# then passed again to the print_run_stats function to print a summary. See src/utils/copy_and_convert_all_labels.py for
+# a usage example.
 def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False):
-    frame_stats = {
-        'unique_labels': 0,
-        'duplicate_labels': 0,
-        'negative_coordinates_trimmed': 0,
-        'duplicate_tracks_renumbered': 0
-    }
+    frame_stats = {'unique_labels': 0,  # Total unique labels (not frames, some frames have 0 or 2+ labels)
+                   'duplicate_labels': 0,  # Total duplicate labels (bounding boxes are identical)
+                   'negative_coordinates_trimmed': 0,  # Total labels with negative coordinates trimmed
+                   'duplicate_tracks_renumbered': 0  # Total duplicate tracks renumbered
+                   }
     dataset_dir_path = Path(dataset_dir_path)
     label_dir_path = dataset_dir_path / settings['labels_dir']
     track_dir_path = dataset_dir_path / settings['tracks_dir']
@@ -20,10 +35,10 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, unique_stats = _load_unique_labels(json_file_path)
-    trim_stats = _trim_negative_coordinates(labels)
-    _increment_all_tracks(tracks) # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
-    dedup_stats = _deduplicate_tracks(tracks)
+    labels, tracks, unique_stats = _load_unique_labels(json_file_path)  # Loads labels and deduplicates them
+    trim_stats = _trim_negative_coordinates(labels)  # Trims labels with negative coordinates
+    _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
+    dedup_stats = _deduplicate_tracks(tracks)  # Deduplicate tracks (different from labels)
 
     frame_stats.update(unique_stats)
     frame_stats.update(trim_stats)
@@ -39,9 +54,11 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
 
     return frame_stats
 
-# This is a helper method for scripts which use this module. run_stats should be formatted as a dictionary of dictionaries,
-# where the outer dictionary is keyed by the statistic name, the inner dictionary is keyed by the file stem of the
-# frame, and the value is the statistic value for that frame.
+
+# This is a helper method for scripts which use this module. run_stats should be formatted as a dictionary of
+# dictionaries, where the outer dictionary is keyed by the statistic name, the inner dictionary is keyed by the file
+# stem of the frame, and the value is the statistic value for that frame. See convert_and_save_label() comments for key
+# descriptions.
 def print_run_stats(run_stats):
     total_duplicate_tracks = 0
     total_unique_labels = 0
@@ -79,16 +96,23 @@ def print_run_stats(run_stats):
     print(f"Total frames: {total_frames}")
     print(f"Total unique labels: {total_unique_labels}")
     print(f"Proportion of duplicate tracks: {duplicate_track_ratio:.2%}")
-    if duplicate_track_ratio > .15: # This is an arbitrary threshold -- it's a warning, not an error
+    if duplicate_track_ratio > .15:  # This is an arbitrary threshold -- it's a warning, not an error
         print("WARNING: High proportion of duplicate tracks detected. This may indicate a problem with the labeling. "
               "Consider regenerating track ids for this dataset using the regenerate_tracks.py script.")
 
+
+# This function takes a track file path and increments all track IDs by the specified amount. This is particularly
+# useful for aggregate datasets, which contain labels and tracks from multiple clips. Separating the tracks by clip
+# allows for the tracker metrics to distinguish them.
 def increment_track_file_by_amount(track_file_path, amount):
     track_file_path = Path(track_file_path)
     tracks = _load_tracks(track_file_path)
     _increment_all_tracks(tracks, amount)
     _write_track(tracks, track_file_path)
 
+
+# This function takes a label file path and creates a corresponding track file with the same name in the same dataset.
+# This is useful for creating background tracks for frames with empty labels.
 def create_background_tracks_file(label_file_path):
     label_file_path = Path(label_file_path)
     track_dir_path = label_file_path.parent
@@ -96,11 +120,38 @@ def create_background_tracks_file(label_file_path):
     track_file_path = track_dir_path / f"{label_file_path.stem}.txt"
     track_file_path.touch()
 
+
+# Below this line are private functions which are not intended to be used outside of this module.
+
+# IO functions
+
 def _load_tracks(track_file_path):
     with open(track_file_path, 'r') as track_file:
         track_ids = [int(line.strip()) for line in track_file.readlines()]
         return track_ids
 
+
+def _write_track(tracks, track_file_path):
+    with open(track_file_path, 'w') as out_file:
+        for track in tracks:
+            out_file.write(f"{track}\n")
+
+
+def _write_label(labels, label_file_path):
+    with open(label_file_path, 'w') as out_file:
+        for label in labels:
+            x_center, y_center, width, height = label
+            out_file.write(f"0 {x_center} {y_center} {width} {height}\n")
+
+
+# This is a placeholder for oriented bounding box labels, which are not yet implemented
+def _write_obb_label(labels, label_file_path):
+    with open(label_file_path, 'w') as out_file:
+        for label in labels:
+            pass
+
+
+# Label load, normalization, conversion, and deduplication
 def _load_unique_labels(json_file_path):
     labels = []
     tracks = []
@@ -147,20 +198,22 @@ def _load_unique_labels(json_file_path):
         else:
             stats['duplicate_labels'] += 1
 
-
     return labels, tracks, stats
 
+
+# Trim negative coordinates to 0 and adjust width or height to maintain the inner edge of the box
 def _trim_negative_coordinates(labels):
     stats = {'negative_coordinates_trimmed': 0}
     for i, label in enumerate(labels):
         x_center, y_center, width, height = label
 
-        # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in the frame
-        # should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the width or height
-        # by 2 * the negative coordinate -- this pulls the negative edge of the box slightly closer while maintaining
-        # the center as close as possible to the original center.
+        # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in the
+        # frame should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the width or
+        # height by 2 * the negative coordinate -- this pulls the negative edge of the box slightly closer while
+        # maintaining the center as close as possible to the original center.
 
-        # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an edge case
+        # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an edge
+        # case
 
         if x_center < 0 or y_center < 0:
             stats['negative_coordinates_trimmed'] += 1
@@ -179,17 +232,6 @@ def _trim_negative_coordinates(labels):
 
     return stats
 
-def _write_label(labels, label_file_path):
-    with open(label_file_path, 'w') as out_file:
-        for label in labels:
-            x_center, y_center, width, height = label
-            out_file.write(f"0 {x_center} {y_center} {width} {height}\n")
-
-# This is a placeholder for oriented bounding box labels, which are not yet implemented
-def _write_obb_label(labels, label_file_path):
-    with open(label_file_path, 'w') as out_file:
-        for label in labels:
-            pass
 
 # This is a placeholder for oriented bounding box labels, which are not yet implemented
 def _convert_labels_to_oriented(labels):
@@ -197,10 +239,15 @@ def _convert_labels_to_oriented(labels):
         x_center, y_center, width, height = label
         pass
 
+
+# Increments a tracks array by a specified amount
 def _increment_all_tracks(tracks, amount=1):
     for i in range(len(tracks)):
         tracks[i] += amount
 
+
+# Deduplicate tracks by renumbering them. Intended as a one-off fix for occasional labeling mistakes. More systemic
+# deduplication should be done with regenerate_tracks.py.
 def _deduplicate_tracks(tracks):
     stats = {'duplicate_tracks_renumbered': 0}
     seen_tracks = {}
@@ -214,16 +261,14 @@ def _deduplicate_tracks(tracks):
             seen_tracks[tracks[i]] = 1
     return stats
 
-# This will return the lowest numbered track ID which is not in the list of tracks. It will interleave numbers which are missing
-# rather than defaulting to max() because sometimes duplicates are just a single-frame mistake, and it's better as a
-# default to try to guess the correct track ID rather than defaulting to the highest number. But this has no knowledge
-# about other frames so it's by nature not perfect.
+
+# This will return the lowest numbered track ID which is not in the list of tracks. It will interleave numbers which
+# are missing rather than defaulting to max() because sometimes duplicates are just a single-frame mistake,
+# and it's better as a default to try to guess the correct track ID rather than defaulting to the highest number. But
+# this has no knowledge about other frames so it's by nature not perfect.
 def _first_unused_track_id(tracks):
-    for i in range(min(tracks), min(tracks) + len(tracks) + 1): # +2 because range is exclusive and if the tracks are sequential we want to return the next number
+    for i in range(min(tracks), min(tracks) + len(
+            tracks) + 1):  # +2 because range is exclusive and if the tracks are sequential we want to return the
+        # next number
         if i not in tracks:
             return i
-
-def _write_track(tracks, track_file_path):
-    with open(track_file_path, 'w') as out_file:
-        for track in tracks:
-            out_file.write(f"{track}\n")
