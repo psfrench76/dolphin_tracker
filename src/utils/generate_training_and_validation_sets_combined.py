@@ -5,9 +5,6 @@ from pathlib import Path
 from inc.settings import settings
 
 def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input_folder, train_prop, valid_prop, test_prop, negative_prop):
-    """
-    Generate train and valid sets from input folders based on given proportions.
-    """
     # Check if proportions sum to 1
     if not (0 <= train_prop <= 1 and 0 <= valid_prop <= 1 and 0 <= test_prop <= 1 and 0 <= negative_prop <= 1):
         raise ValueError("Proportions must be between 0 and 1")
@@ -77,34 +74,6 @@ def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input
     print(f"Negative images copied to train set: {negative_train_count}")
     print(f"Negative images copied to valid set: {negative_valid_count}")
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Generate train and valid sets from input folders based on given proportions.")
-    parser.add_argument('test_folder', type=Path, help='Path to the test folder')
-    parser.add_argument('train_folder', type=Path, help='Path to the train folder')
-    parser.add_argument('valid_folder', type=Path, help='Path to the valid folder')
-    parser.add_argument('input_folder', type=Path, help='Path to the input folder')
-    parser.add_argument('train_prop', type=float, help='Proportion of training data')
-    parser.add_argument('valid_prop', type=float, help='Proportion of validation data')
-    parser.add_argument('test_prop', type=float, help='Proportion of test data')
-    parser.add_argument('negative_prop', type=float, help='Proportion of negative examples')
-    args = parser.parse_args()
-
-    generate_train_and_valid_sets(args.test_folder, args.train_folder, args.valid_folder, args.input_folder, args.train_prop, args.valid_prop, args.test_prop, args.negative_prop)"""
-This script generates a detector validation set from a given test set directory.
-It takes an input test set directory and an output valid set directory, ensuring that both directory names are in settings['dataset_split_dirs'].
-The script performs the following steps:
-1. Validates the input and output directory names against settings['dataset_split_dirs'].
-2. Creates the output directories if they do not exist.
-3. Copies image and label files from the input directory to the output directory, skipping any image files that do not have corresponding labels.
-4. Tracks and reports the number of files of each type copied.
-
-Usage: generate_detector_validation_set.py <input_dir> <output_dir>
-"""
-
-import argparse
-from pathlib import Path
-import shutil
-from inc.settings import settings
 
 def validate_directory_name(directory, valid_names):
     if not any(directory.name == name for name in valid_names):
@@ -143,10 +112,25 @@ def generate_detector_validation_set(input_dir, output_dir):
     print(f"Total labels copied: {copied_labels_count}")
     print(f"Total images skipped: {skipped_images_count}")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate detector validation set from test set.")
-    parser.add_argument('input_dir', type=str, help='Path to the input test set directory')
-    parser.add_argument('output_dir', type=str, help='Path to the output valid set directory')
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Generate train and valid sets from input folders based on given proportions.")
+    parser.add_argument('test_folder', type=Path, help='Path to the test folder')
+    parser.add_argument('train_folder', type=Path, help='Path to the train folder')
+    parser.add_argument('valid_folder', type=Path, help='Path to the valid folder')
+    parser.add_argument('input_folder', type=Path, help='Path to the input folder')
+    parser.add_argument('train_prop', type=float, help='Proportion of training data')
+    parser.add_argument('valid_prop', type=float, help='Proportion of validation data')
+    parser.add_argument('test_prop', type=float, help='Proportion of test data')
+    parser.add_argument('negative_prop', type=float, help='Proportion of negative examples')
     args = parser.parse_args()
 
-    generate_detector_validation_set(args.input_dir, args.output_dir)
+    generate_train_and_valid_sets(args.test_folder, args.train_folder, args.valid_folder, args.input_folder, args.train_prop, args.valid_prop, args.test_prop, args.negative_prop)
+
+
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(description="Generate detector validation set from test set.")
+#     parser.add_argument('input_dir', type=str, help='Path to the input test set directory')
+#     parser.add_argument('output_dir', type=str, help='Path to the output valid set directory')
+#     args = parser.parse_args()
+#
+#     generate_detector_validation_set(args.input_dir, args.output_dir)
