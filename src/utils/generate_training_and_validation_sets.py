@@ -46,6 +46,16 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     valid_dir_path = dataset_root_path / settings['dataset_valid_split']
     test_dir_path = dataset_root_path / settings['dataset_test_split']
 
+    if train_dir_path.is_dir():
+        raise ValueError(
+            "Training directory already exists. Please remove it before running this script, because it will "
+            "overwrite things chaotically.")
+
+    if valid_dir_path.is_dir():
+        raise ValueError(
+            "Validation directory already exists. Please remove it before running this script, because it will "
+            "overwrite things chaotically.")
+
     train_images_dir_path = train_dir_path / settings['images_dir']
     train_labels_dir_path = train_dir_path / settings['labels_dir']
 
@@ -78,14 +88,12 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
                 else:
                     train_set.append((image_file, label_file))
 
+    negative_count = len(train_set_negative)
     # Handle negative examples based on negative_example_fraction
     if negative_example_fraction < 1:
         random.shuffle(train_set_negative)
         negative_count = int(len(train_set_negative) * negative_example_fraction)
-        train_set_negative = train_set_negative[:negative_count]
-
-    # Combine positive and negative training examples
-    train_set.extend(train_set_negative)
+        train_set.extend(train_set_negative[:negative_count])
 
     # Build validation set, a copy of test set but only examples with labels
     for image_file in test_images:
@@ -104,10 +112,15 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
         shutil.copy(image_path, valid_images_dir_path / image_path.name)
         shutil.copy(label_path, valid_labels_dir_path / label_path.name)
 
-    print(f"Images copied to train set: {len(train_set)}")
-    print(f"Negative images copied to train set: {len(train_set_negative)}")
+    total_dataset_size = len(train_set) + len(test_images)
+    print(f"Total images and labels copied to train set: {len(train_set)}")
+    print(f"Positive images copied to train set: {len(train_set) - negative_count}")
+    print(f"Negative images copied to train set: {negative_count} out of {len(train_set_negative)}")
     print(f"Images and labels copied from test to validation set: {len(valid_set)}")
     print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}")
+    print(
+        f"This results in a train/test split of {len(train_set) / total_dataset_size:.2%}/"
+        f"{len(test_images) / total_dataset_size:.2%}.")
 
 
 if __name__ == '__main__':
