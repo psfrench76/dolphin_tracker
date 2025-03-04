@@ -1,11 +1,11 @@
-from .settings import settings
-from pathlib import Path
-import json
-
 """
 This file holds the core functionality of the dataset conversion toolset. It is designed to be used as a module
 by other scripts, and is not intended to be run directly. See the function comments for descriptions of functionality.
 """
+
+from .settings import settings
+from pathlib import Path
+import json
 
 
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
