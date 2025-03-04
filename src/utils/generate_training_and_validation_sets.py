@@ -125,12 +125,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     generate_train_and_valid_sets(args.test_folder, args.train_folder, args.valid_folder, args.input_folder, args.train_prop, args.valid_prop, args.test_prop, args.negative_prop)
-
-
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(description="Generate detector validation set from test set.")
-#     parser.add_argument('input_dir', type=str, help='Path to the input test set directory')
-#     parser.add_argument('output_dir', type=str, help='Path to the output valid set directory')
-#     args = parser.parse_args()
-#
-#     generate_detector_validation_set(args.input_dir, args.output_dir)
+    generate_detector_validation_set(args.test_folder, args.valid_folder)
