@@ -2,6 +2,7 @@ import argparse
 import shutil
 import random
 from pathlib import Path
+from inc.settings import settings
 
 def generate_train_and_valid_sets(test_folder, train_folder, valid_folder, input_folder, train_prop, valid_prop, test_prop, negative_prop):
     """
