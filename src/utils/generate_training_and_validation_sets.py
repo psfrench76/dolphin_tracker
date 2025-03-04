@@ -34,11 +34,14 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
 
     # Get list of test images
-    test_images = set(test_images_dir_path.iterdir())
+    test_images = set(test_images_dir_path.glob('*.jpg'))
+
+    train_set = []
+    train_set_negative = []
+    valid_set = []
+    images_without_labels_count = 0
 
     # Traverse complete_source_dir_path and find images with corresponding labels
-    train_set_positive = []
-    train_set_negative = []
     for image_file in complete_source_dir_path.rglob('*.jpg'):
         if image_file not in test_images:
             label_file = image_file.parent.parent / settings['labels_dir'] / image_file.with_suffix('.txt').name
@@ -46,7 +49,7 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
                 if label_file.stat().st_size == 0:
                     train_set_negative.append((image_file, label_file))
                 else:
-                    train_set_positive.append((image_file, label_file))
+                    train_set.append((image_file, label_file))
 
     # Handle negative examples based on negative_prop
     if negative_example_fraction < 1:
@@ -54,33 +57,28 @@ def generate_train_and_valid_sets(dataset_root_path, complete_source_dir_path, n
         negative_count = int(len(train_set_negative) * negative_example_fraction)
         train_set_negative = train_set_negative[:negative_count]
 
-    train_set_positive.extend(train_set_negative)
+    train_set.extend(train_set_negative)
 
-    # Copy files to train and valid folders
-    for image_path, label_path in train_set_positive:
-        shutil.copy(image_path, train_dir_path / 'images' / image_path.name)
-        shutil.copy(label_path, train_dir_path / 'labels' / label_path.name)
-
-    print(f"Images copied to train set: {len(train_set_positive)}")
-    print(f"Negative images copied to train set: {len(train_set_negative)}")
-
-    copied_images_count = 0
-    copied_labels_count = 0
-    skipped_images_count = 0
-
-    for image_file in test_images_dir_path.glob('*.jpg'):
+    for image_file in test_images:
         label_file = test_labels_dir_path / (image_file.stem + '.txt')
         if label_file.exists():
-            shutil.copy(image_file, valid_images_dir_path / image_file.name)
-            shutil.copy(label_file, valid_labels_dir_path / label_file.name)
-            copied_images_count += 1
-            copied_labels_count += 1
+            valid_set.append((image_file, label_file))
         else:
-            skipped_images_count += 1
+            images_without_labels_count += 1
 
-    print(f"Total images copied: {copied_images_count}")
-    print(f"Total labels copied: {copied_labels_count}")
-    print(f"Total images skipped: {skipped_images_count}")
+    # Copy files to train and valid folders
+    for image_path, label_path in train_set:
+        shutil.copy(image_path, train_images_dir_path / image_path.name)
+        shutil.copy(label_path, train_labels_dir_path / label_path.name)
+
+    for image_path, label_path in valid_set:
+        shutil.copy(image_path, valid_images_dir_path / image_path.name)
+        shutil.copy(label_path, valid_labels_dir_path / label_path.name)
+
+    print(f"Images copied to train set: {len(train_set)}")
+    print(f"Negative images copied to train set: {len(train_set_negative)}")
+    print(f"Images and labels copied from test to validation set: {len(valid_set)}")
+    print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Generate train and valid sets from input folders based on given proportions.")
