@@ -1,7 +1,7 @@
 from random import shuffle
 
 from track import run_tracking_and_evaluation
-from utils.settings import settings, project_path, storage_path
+from utils.inc.settings import settings, project_path, storage_path
 import click
 import yaml
 import random

@@ -6,7 +6,7 @@ from pathlib import Path
 from src.track import run_tracking_and_evaluation
 from utils.generate_prediction_video import generate_video
 from utils.parse_video import extract_frames
-from src.utils.settings import settings, storage_path, project_path
+from src.utils.inc.settings import settings, storage_path, project_path
 import pysrt
 import pandas as pd
 import re

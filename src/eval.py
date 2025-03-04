@@ -5,9 +5,9 @@ from ultralytics import YOLO
 from pathlib import Path
 
 if __package__ is None or __package__ == '':
-    from utils.settings import settings, project_path, storage_path
+    from utils.inc.settings import settings, project_path, storage_path
 else:
-    from .utils.settings import settings, project_path, storage_path
+    from .utils.inc.settings import settings, project_path, storage_path
 
 
 @click.command()

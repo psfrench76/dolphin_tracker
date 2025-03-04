@@ -8,8 +8,8 @@ Usage: copy_and_convert_all_labels.py <source_dir> <dest_dir> [--oriented_bbox]
 
 import argparse
 from pathlib import Path
-from data_conversion import convert_and_save_label, print_run_stats
-from settings import settings
+from inc.data_conversion import convert_and_save_label, print_run_stats
+from inc.settings import settings
 
 def copy_and_convert_all_labels(source_dir, dest_dir, oriented_bbox=False):
     source_path = Path(source_dir)

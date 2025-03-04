@@ -1,8 +1,4 @@
-if __package__ is None or __package__ == '':
-    from settings import settings
-else:
-    from .settings import settings
-
+from .settings import settings
 from pathlib import Path
 import json
 

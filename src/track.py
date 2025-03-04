@@ -12,11 +12,11 @@ from pathlib import Path
 from shapely.geometry import box as shape_box
 
 if __package__ is None or __package__ == '':
-    from utils.settings import settings, project_path
-    from utils.tracking_metrics import TrackingMetrics
+    from utils.inc.settings import settings, project_path
+    from utils.inc.tracking_metrics import TrackingMetrics
 else:
-    from .utils.settings import settings, project_path
-    from .utils.tracking_metrics import TrackingMetrics
+    from .utils.inc.settings import settings, project_path
+    from .utils.inc.tracking_metrics import TrackingMetrics
 
 
 @click.command()

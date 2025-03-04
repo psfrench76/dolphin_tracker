@@ -2,7 +2,7 @@ import yaml
 import os
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[2]
+project_root = Path(__file__).resolve().parents[3]
 config_file = project_root / 'cfg/settings.yaml'
 
 

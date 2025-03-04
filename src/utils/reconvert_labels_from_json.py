@@ -8,8 +8,8 @@ Usage: reconvert_labels_from_json.py <source_dir> <dest_dir> [--oriented_bbox]
 
 import argparse
 from pathlib import Path
-from data_conversion import convert_and_save_label, print_run_stats, create_background_tracks_file
-from settings import settings
+from inc.data_conversion import convert_and_save_label, print_run_stats, create_background_tracks_file
+from inc.settings import settings
 
 def index_files(directory):
     """

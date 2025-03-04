@@ -17,8 +17,8 @@ Usage: separate_tracks_in_aggregate_dataset.py <tracks_dir> [--separate_non_cont
 
 import argparse
 from pathlib import Path
-from data_conversion import increment_track_file_by_amount
-from settings import settings
+from inc.data_conversion import increment_track_file_by_amount
+from inc.settings import settings
 
 def process_tracks(tracks_dir, separate_non_contiguous):
     tracks_path = Path(tracks_dir)

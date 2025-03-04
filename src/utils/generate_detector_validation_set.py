@@ -13,7 +13,7 @@ Usage: generate_detector_validation_set.py <input_dir> <output_dir>
 import argparse
 from pathlib import Path
 import shutil
-from settings import settings
+from inc.settings import settings
 
 def validate_directory_name(directory, valid_names):
     if not any(directory.name == name for name in valid_names):
