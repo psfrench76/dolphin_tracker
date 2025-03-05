@@ -115,7 +115,7 @@ def increment_track_file_by_amount(track_file_path, amount):
 # This is useful for creating background tracks for frames with empty labels.
 def create_background_tracks_file(label_file_path):
     label_file_path = Path(label_file_path)
-    track_dir_path = label_file_path.parent
+    track_dir_path = label_file_path.parent.parent / settings['tracks_dir']
     track_dir_path.mkdir(exist_ok=True)
     track_file_path = track_dir_path / f"{label_file_path.stem}.txt"
     track_file_path.touch()
