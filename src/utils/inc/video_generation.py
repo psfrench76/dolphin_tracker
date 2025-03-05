@@ -12,6 +12,7 @@ from tqdm import tqdm
 import numpy as np
 import yaml
 from pathlib import Path
+from .settings import settings
 
 # Args:
 # image_folder: (Path) Path to the folder containing image frames.
@@ -21,15 +22,12 @@ from pathlib import Path
 # gt: (bool) Label as ground truth video
 
 def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
-    with open('cfg/settings.yaml') as f:
-        settings = yaml.safe_load(f)
-
     # Read the bounding box file
     bboxes = pd.read_csv(bbox_file, header=None)
-    bboxes.columns = ['frame', 'id', 'x', 'y', 'w', 'h', 'score', 'class', 'visibility']
+    bboxes.columns = settings['bbox_file_columns']
 
     # Sort images by filename to ensure correct order
-    image_files = sorted([f for f in image_folder.iterdir() if f.suffix in {'.png', '.jpg', '.jpeg'}])
+    image_files = sorted([f for f in image_folder.iterdir() if f.suffix in settings['image_file_extensions']])
     if not image_files:
         print("No images found in the specified folder.")
         return
@@ -62,12 +60,9 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     ]
     track_colors = {}
 
-    # Regex pattern to extract frame number and base name
-    pattern = r"(\d+)(?=[._](jpg|png|jpeg))"
-
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames"):
-        match = re.search(pattern, image_file.name)
+        match = re.search(settings['frame_number_regex'], image_file.name)
         if match:
             frame_number = int(match.group(1))
         else:

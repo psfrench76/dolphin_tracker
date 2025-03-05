@@ -62,6 +62,26 @@ dolphin_classes:
   - box
   - rectangle
 
+# Tracking output file settings
+bbox_file_columns:
+    - 'frame'
+    - 'id'
+    - 'x'
+    - 'y'
+    - 'w'
+    - 'h'
+    - 'score'
+    - 'class'
+    - 'visibility'
+
+# Image file settings
+image_file_extensions: # Note that currently jpg is the only fully supported format, but this is for future expansion
+  - '.jpg'
+  - '.jpeg'
+  - '.png'
+
+frame_number_regex: '_(\d+)\.' # Regular expression to extract the frame number from the image file name
+
 # Metrics sets
 training_metrics_to_print:
   - 'metrics/precision(B)'
