@@ -7,7 +7,7 @@ to improve file transfer time).
 
 import argparse
 from pathlib import Path
-from inc.generate_annotated_video import generate_video
+from inc.video_generation import generate_video
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a video from image frames and bounding box predictions.")
