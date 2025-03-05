@@ -1,8 +1,5 @@
 """
-This script takes the original .jpg frames of a video and the output from dolphin_tracker (.txt file in MOT15 format),
-and generates an .mp4 video. The video is saved to the output location specified in --output_folder, and is resized
-according to the --resize option (this doesn't significantly affect processing speed, and is primarily present
-to improve file transfer time).
+This module contains a function to generate videos with bounding boxes and labels from a dataset. The function requires a dataset root directory, which should contain an images (settings['images_dir']) directory. If a bbox_file path is provided, then it should be in MOT15 format, as an output from the tracker. If no bbox_file is provided, then the function will look for labels and tracks in the dataset root directory. The output video will be saved to the output_folder.
 """
 
 import cv2
@@ -10,21 +7,34 @@ import re
 import pandas as pd
 from tqdm import tqdm # This is for the progress bar
 import numpy as np
-import yaml
-from pathlib import Path
 from .settings import settings
 
 # Args:
-# image_folder: (Path) Path to the folder containing image frames.
-# bbox_file: (Path) Path to the bounding box prediction file (MOT15 format).
-# output_folder: (Path) Path to the output folder for the video file.
-# resize: (float) If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.
-# gt: (bool) Label as ground truth video
+# dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory with individual frames, and optionally a labels directory with ground truth labels in YOLO format. If no bbox_path is provided, then the function will look for labels and tracks in the dataset root directory.
+# output_folder (Path): Path to the output folder for the video file.
+# resize (float): If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.
+# bbox_path (Path): Path to the bounding box prediction file (MOT15 format). If provided, the function will use this file to generate the video. If not provided, the function will look for labels and tracks in the dataset root directory.
+def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None):
+    if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
+        raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
-def generate_video(image_folder, bbox_file, output_folder, resize, gt):
+    run_name = output_folder.name
+
+    # Get bounding boxes
+    if not bbox_path:
+        all_bboxes = _get_bboxes_from_dataset_root(bbox_path)
+        output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
+    elif bbox_path.suffix == '.txt':
+        all_bboxes = _get_bboxes_from_txt(bbox_path)
+        output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
+    else:
+        raise ValueError("Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
+
+    # Get image files
+    image_folder = dataset_root_path / settings['images_dir']
     image_files = sorted([f for f in image_folder.iterdir() if f.suffix in settings['image_file_extensions']])
     if not image_files:
-        print("No images found in the specified folder.")
+        print(f"No images found in the {image_folder}")
         return
 
     # Initialize video writer
@@ -40,12 +50,6 @@ def generate_video(image_folder, bbox_file, output_folder, resize, gt):
         new_width = int(width * resize)
         new_height = int(height * resize)
 
-    run_name = output_folder.name
-    if gt:
-        output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
-    else:
-        output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
-
     # Set the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (new_width, new_height))
@@ -58,9 +62,6 @@ def generate_video(image_folder, bbox_file, output_folder, resize, gt):
     font_scale = 0.4
     font_height = int(22 * font_scale)  # Just based on default cv2 font height
     text_vertical_margin = 5
-
-    # Get bounding boxes from the CSV file
-    all_bboxes = _get_bboxes_from_csv(bbox_file)
 
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames"):
@@ -112,10 +113,39 @@ def generate_video(image_folder, bbox_file, output_folder, resize, gt):
     video_writer.release()
     print(f"Video saved to {output_video_path}")
 
-def _get_bboxes_from_csv(csv_file):
+def _get_bboxes_from_txt(csv_file):
     bboxes = pd.read_csv(csv_file, header=None)
     bboxes.columns = settings['bbox_file_columns']
     return bboxes
+
+def _get_bboxes_from_dataset_root(dataset_root_path):
+    labels_dir = dataset_root_path / settings['labels_dir']
+    tracks_dir = dataset_root_path / settings['tracks_dir']
+    all_bboxes = []
+
+    for label_file in labels_dir.iterdir():
+        track_file = tracks_dir / label_file.name
+        match = re.search(settings['frame_number_regex'], label_file.name)
+        if match:
+            frame_number = int(match.group(1))
+        else:
+            raise ValueError(f"Could not parse frame number from file: {label_file}")
+
+        if track_file.exists():
+            if label_file.stat().st_size == 0:
+                continue
+
+            bboxes = pd.read_csv(label_file, header=None, sep=' ', index_col=None)
+            tracks = pd.read_csv(track_file, header=None, sep=' ', index_col=None)
+            bboxes.columns = settings['bbox_file_columns'][1:6]
+            bboxes.insert(0, 'frame', frame_number)
+            bboxes['id'] = tracks
+            all_bboxes.append(bboxes)
+        else:
+            raise ValueError(f"Label file {label_file} found without corresponding track file {track_file}")
+
+    bboxes_df = pd.concat(all_bboxes, ignore_index=True)
+    return bboxes_df
 
 def _get_bbox_from_yolo_coordinates(x, y, w, h, img_width, img_height):
     bbox = {

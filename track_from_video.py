@@ -4,7 +4,7 @@ import argparse
 import yaml
 from pathlib import Path
 from src.track import run_tracking_and_evaluation
-from src.utils.inc.video_generation import generate_video
+from src.utils.inc.video_generation import generate_video_with_labels
 from utils.parse_video import extract_frames
 from src.utils.inc.settings import settings, storage_path, project_path
 import pysrt
@@ -124,8 +124,7 @@ def main():
         print(f"Generating prediction video...")
 
         results_file_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
-        image_dir_path = dataset_path / image_dir_name
-        generate_video(image_dir_path, results_file_path, output_dir_path, resize_ratio, False)
+        generate_video_with_labels(dataset_path, output_dir_path, resize_ratio, results_file_path)
 
         video_filename = f"{input_name}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename
@@ -135,9 +134,7 @@ def main():
     if args.ground_truth_video:
         print(f"Generating ground truth video...")
 
-        gt_file_path = output_dir_path / f"{input_name}_{settings['gt_file_suffix']}"
-        image_dir_path = dataset_path / image_dir_name
-        generate_video(image_dir_path, gt_file_path, output_dir_path, resize_ratio, True)
+        generate_video_with_labels(dataset_path, output_dir_path, resize_ratio)
 
         video_filename = f"{input_name}_{settings['gt_video_suffix']}"
         video_path = output_dir_path / video_filename

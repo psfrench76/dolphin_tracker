@@ -7,18 +7,17 @@ to improve file transfer time).
 
 import argparse
 from pathlib import Path
-from inc.video_generation import generate_video
+from inc.video_generation import generate_video_with_labels
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a video from image frames and bounding box predictions.")
-    parser.add_argument('--image_folder', required=True, type=Path, help="Path to the folder containing image frames.")
-    parser.add_argument('--bbox_file', required=True, type=Path, help="Path to the bounding box prediction file (MOT15 format).")
-    parser.add_argument('--output_folder', required=True, type=Path, help="Path to the output folder for the video file.")
-    parser.add_argument('--resize', default=1.0, type=float, help="If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.")
-    parser.add_argument('--gt', action='store_true', help="Label as ground truth video")
+    parser = argparse.ArgumentParser(description="Generate a video from image frames and bounding box predictions or ground truth.")
+    parser.add_argument('--dataset_root_path', '-d', required=True, type=Path, help="Path to the dataset root folder")
+    parser.add_argument('--output_folder', '-o', required=True, type=Path, help="Path to the output folder for the video file.")
+    parser.add_argument('--resize', '-r', default=1.0, type=float, help="If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.")
+    parser.add_argument('--bbox_path', '-bb', type=Path, help="Path to the bounding box prediction file (MOT15 format).")
     args = parser.parse_args()
 
-    generate_video(args.image_folder, args.bbox_file, args.output_folder, args.resize, args.gt)
+    generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_file)
 
 if __name__ == '__main__':
     main()
