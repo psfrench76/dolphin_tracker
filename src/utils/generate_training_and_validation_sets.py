@@ -13,7 +13,8 @@ Usage: generate_training_and_validation_sets.py <complete_source_dir_path> <data
 Args:
 complete_source_dir_path (Path): Path to the complete source directory. This directory should contain images and
 labels for all examples, preprocessed and converted into yolo format. It should also be cleaned, having bad
-filenames, duplicate labels, etc. removed.
+filenames, duplicate labels, etc. removed. See scripts copy_and_convert_all_labels.py and reconvert_labels_from_json.py
+for details on this process.
 
 dataset_root_path (Path): Path to the dataset root directory we are creating. This should already have a test set (
 folder settings['dataset_test_split']) with images and labels.
@@ -56,6 +57,11 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
             "Validation directory already exists. Please remove it before running this script, because it will "
             "overwrite things chaotically.")
 
+    if not test_dir_path.is_dir():
+        raise ValueError(f"Test directory does not exist. Please create the {settings['dataset_split']} folder and "
+                         f"populate {settings['images_dir']} and {settings['labels_dir']} directories before running "
+                         f"this script.")
+
     train_images_dir_path = train_dir_path / settings['images_dir']
     train_labels_dir_path = train_dir_path / settings['labels_dir']
 
@@ -72,6 +78,7 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
 
     test_images = set(test_images_dir_path.glob('*.jpg'))
+    # Find all images in the source directory, including those behind symlinks (getting around limitation in pathlib)
     source_images = [Path(root) / file for root, _, files in
                      complete_source_dir_path.walk(complete_source_dir_path, follow_symlinks=True) for file in files if
                      file.endswith('.jpg')]
@@ -117,12 +124,15 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
 
     total_dataset_size = len(train_set) + len(test_images)
     print(f"Total images in source directory: {len(source_images)}")
-    print(f"Total images in test set: {len(test_images)}")
+    print(f"Total images in test set: {len(test_images)}\n")
+
+    print(f"Images and labels copied from test to validation set: {len(valid_set)}")
+    print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}\n")
+
     print(f"Total images and labels copied to train set: {len(train_set)}")
     print(f"Positive images copied to train set: {len(train_set) - negative_count}")
-    print(f"Negative images copied to train set: {negative_count} out of {len(train_set_negative)}")
-    print(f"Images and labels copied from test to validation set: {len(valid_set)}")
-    print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}")
+    print(f"Negative images copied to train set: {negative_count} out of {len(train_set_negative)} available\n")
+
     print(f"This results in a train/test split of {len(train_set) / total_dataset_size:.2%}/"
           f"{len(test_images) / total_dataset_size:.2%}.")
 

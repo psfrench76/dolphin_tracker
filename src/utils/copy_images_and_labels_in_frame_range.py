@@ -1,10 +1,11 @@
 """
 This script copies image, label, and track files from an input dataset to an output dataset
 based on a specified frame number range. The range is inclusive of the start frame and
-exclusive of the end frame.
+exclusive of the end frame. If skip_images_without_labels is True, images without labels will be skipped, otherwise all
+images will be copied.
 
-Usage: copy_images_and_labels_in_frame_range.py <source_dataset_root> <dest_dataset_root> <start_frame> <end_frame> [
---skip_images_without_labels]
+Usage: copy_images_and_labels_in_frame_range.py <source_dataset_root> <dest_dataset_root> <start_frame>
+        <end_frame> [--skip_images_without_labels]
 """
 
 import shutil
@@ -15,8 +16,7 @@ from inc.settings import settings
 
 
 # Copy images, labels, and tracks from source_dataset_root to dest_dataset_root whose frame numbers are between
-# start_frame and end_frame. The range is inclusive of the start_frame and exclusive of the end_frame. If
-# skip_images_without_labels is True, images without labels will be skipped, otherwise all images will be copied.
+# start_frame and end_frame. The range is inclusive of the start_frame and exclusive of the end_frame.
 def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_frame, skip_images_without_labels):
     source_dataset_root_path = Path(source_dataset_root)
     dest_dataset_root_path = Path(dest_dataset_root)
