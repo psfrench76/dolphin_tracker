@@ -8,7 +8,7 @@ It generates a training set by copying all image/label pairs from the source (an
 images which are present in the test set. It only includes a specified fraction of negative examples.
 
 Usage: generate_training_and_validation_sets.py <complete_source_dir_path> <dataset_root_path>
-<negative_example_fraction>
+[-n <negative_example_fraction>]
 
 Args:
 complete_source_dir_path (Path): Path to the complete source directory. This directory should contain images and
@@ -72,6 +72,9 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
 
     test_images = set(test_images_dir_path.glob('*.jpg'))
+    source_images = [Path(root) / file for root, _, files in
+                     complete_source_dir_path.walk(complete_source_dir_path, follow_symlinks=True) for file in files if
+                     file.endswith('.jpg')]
 
     train_set = []
     train_set_negative = []
@@ -79,8 +82,8 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     images_without_labels_count = 0
 
     # Traverse complete_source_dir_path and find images with corresponding labels
-    for image_file in complete_source_dir_path.rglob('*.jpg'):
-        if image_file not in test_images:
+    for image_file in source_images:
+        if image_file.name not in [img.name for img in test_images]:
             label_file = image_file.parent.parent / settings['labels_dir'] / image_file.with_suffix('.txt').name
             if label_file.exists():
                 if label_file.stat().st_size == 0:
@@ -113,14 +116,15 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
         shutil.copy(label_path, valid_labels_dir_path / label_path.name)
 
     total_dataset_size = len(train_set) + len(test_images)
+    print(f"Total images in source directory: {len(source_images)}")
+    print(f"Total images in test set: {len(test_images)}")
     print(f"Total images and labels copied to train set: {len(train_set)}")
     print(f"Positive images copied to train set: {len(train_set) - negative_count}")
     print(f"Negative images copied to train set: {negative_count} out of {len(train_set_negative)}")
     print(f"Images and labels copied from test to validation set: {len(valid_set)}")
     print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}")
-    print(
-        f"This results in a train/test split of {len(train_set) / total_dataset_size:.2%}/"
-        f"{len(test_images) / total_dataset_size:.2%}.")
+    print(f"This results in a train/test split of {len(train_set) / total_dataset_size:.2%}/"
+          f"{len(test_images) / total_dataset_size:.2%}.")
 
 
 if __name__ == '__main__':
@@ -128,7 +132,7 @@ if __name__ == '__main__':
         description="Generate train and valid sets from input folders based on given proportions.")
     parser.add_argument('complete_source_dir_path', type=Path, help='Path to the complete source directory')
     parser.add_argument('dataset_root_path', type=Path, help='Path to the dataset root directory we are creating')
-    parser.add_argument('negative_example_fraction', default=1.0, type=float,
+    parser.add_argument('--negative_example_fraction', '-n', default=1.0, type=float,
                         help='Proportion of negative examples to use when generating training set')
     args = parser.parse_args()
 
