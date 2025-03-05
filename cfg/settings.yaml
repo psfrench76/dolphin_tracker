@@ -55,6 +55,18 @@ tracking_hyp_file: 'tracking_hyperparameters.yaml'
 checkpoint_file: 'checkpoint.yaml'
 user_settings_file: 'user_settings.yaml'
 
+# Video generation settings
+track_colors:
+  - [255, 0, 0]
+  - [0, 255, 0]
+  - [255, 255, 0]
+  - [255, 0, 255]
+  - [128, 0, 128]
+  - [128, 128, 0]
+  - [128, 0, 0]
+  - [0, 128, 0]
+  - [0, 128, 128]
+
 # Dataset conversion settings (the class names, coming out of labelme, that have been observed as valid dolphins)
 dolphin_classes:
   - Dolphin
