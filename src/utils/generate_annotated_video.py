@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--bbox_path', '-bb', type=Path, help="Path to the bounding box prediction file (MOT15 format).")
     args = parser.parse_args()
 
-    generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_file)
+    generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_path)
 
 if __name__ == '__main__':
     main()

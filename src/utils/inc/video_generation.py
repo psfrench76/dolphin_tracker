@@ -22,7 +22,7 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
 
     # Get bounding boxes
     if not bbox_path:
-        all_bboxes = _get_bboxes_from_dataset_root(bbox_path)
+        all_bboxes = _get_bboxes_from_dataset_root(dataset_root_path)
         output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
     elif bbox_path.suffix == '.txt':
         all_bboxes = _get_bboxes_from_txt(bbox_path)
