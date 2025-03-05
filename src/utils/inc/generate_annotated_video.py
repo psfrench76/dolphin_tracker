@@ -1,12 +1,3 @@
-import click
-import cv2
-import os
-import re
-import pandas as pd
-from tqdm import tqdm
-import numpy as np
-import yaml
-
 """
 This script takes the original .jpg frames of a video and the output from dolphin_tracker (.txt file in MOT15 format),
 and generates an .mp4 video. The video is saved to the output location specified in --output_folder, and is resized
@@ -14,17 +5,20 @@ according to the --resize_ratio option (this doesn't significantly affect proces
 to improve file transfer time).
 """
 
+import cv2
+import re
+import pandas as pd
+from tqdm import tqdm
+import numpy as np
+import yaml
+from pathlib import Path
 
-@click.command()
-@click.option('--image_folder', required=True, help="Path to the folder containing image frames.")
-@click.option('--bbox_file', required=True, help="Path to the bounding box prediction file (MOT15 format).")
-@click.option('--output_folder', required=True, help="Path to the output folder for the video file.")
-@click.option('--resize_ratio', default=1.0, type=float,
-              help="Ratio by which to resize the frames (e.g., 0.5 for half size).")
-@click.option('--gt', is_flag=True, help="Label as ground truth video")
-def main(image_folder, bbox_file, output_folder, resize_ratio, gt):
-    generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt)
-
+# Args:
+# image_folder: (Path) Path to the folder containing image frames.
+# bbox_file: (Path) Path to the bounding box prediction file (MOT15 format).
+# output_folder: (Path) Path to the output folder for the video file.
+# resize_ratio: (float) Ratio by which to resize the frames (e.g., 0.5 for half size).
+# gt: (bool) Label as ground truth video
 
 def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     with open('cfg/settings.yaml') as f:
@@ -35,21 +29,21 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     bboxes.columns = ['frame', 'id', 'x', 'y', 'w', 'h', 'score', 'class', 'visibility']
 
     # Sort images by filename to ensure correct order
-    image_files = sorted([f for f in os.listdir(image_folder) if f.endswith(('.png', '.jpg', '.jpeg'))])
+    image_files = sorted([f for f in image_folder.iterdir() if f.suffix in {'.png', '.jpg', '.jpeg'}])
     if not image_files:
-        click.echo("No images found in the specified folder.")
+        print("No images found in the specified folder.")
         return
 
-    run_name = os.path.basename(os.path.normpath(output_folder))
+    run_name = output_folder.name
 
     if gt:
-        output_video_path = os.path.join(output_folder, f"{run_name}_{settings['gt_video_suffix']}")
+        output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
     else:
-        output_video_path = os.path.join(output_folder, f"{run_name}_{settings['prediction_video_suffix']}")
+        output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
 
     # Initialize video writer
-    first_image_path = os.path.join(image_folder, image_files[0])
-    first_image = cv2.imread(first_image_path)
+    first_image_path = image_files[0]
+    first_image = cv2.imread(str(first_image_path))
     height, width, _ = first_image.shape
 
     # Calculate new dimensions based on the resize ratio
@@ -58,7 +52,7 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
 
     # Set the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter(output_video_path, fourcc, 30, (new_width, new_height))
+    video_writer = cv2.VideoWriter(str(output_video_path), fourcc, 30, (new_width, new_height))
 
     # Assign colors to track IDs, excluding cyan
     colors = [
@@ -69,21 +63,18 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
     track_colors = {}
 
     # Regex pattern to extract frame number and base name
-    # pattern = r"(.*)_(\d+)(?=[._](jpg|png|jpeg))"
     pattern = r"(\d+)(?=[._](jpg|png|jpeg))"
 
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames"):
-
-        match = re.search(pattern, image_file)
+        match = re.search(pattern, image_file.name)
         if match:
             frame_number = int(match.group(1))
         else:
-            click.echo(f"Could not parse frame number from file: {image_file}")
+            print(f"Could not parse frame number from file: {image_file}")
             continue
 
-        frame_path = os.path.join(image_folder, image_file)
-        frame = cv2.imread(frame_path)
+        frame = cv2.imread(str(image_file))
 
         # Resize the frame
         frame = cv2.resize(frame, (new_width, new_height))
@@ -93,7 +84,6 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
 
         # Draw bounding boxes and labels
         for _, row in frame_bboxes.iterrows():
-            # Convert normalized coordinates to pixel coordinates for the resized frame
             if np.isnan(row['id']):
                 continue
 
@@ -116,7 +106,7 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
             cv2.putText(frame, f'ID: {track_id}', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, track_colors[track_id], 2)
 
         # Add frame ID to the lower left corner
-        cv2.putText(frame, f'Frame: {image_file}', (10, new_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+        cv2.putText(frame, f'Frame: {image_file.name}', (10, new_height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (255, 255, 255), 2)
 
         # Write the frame to the video
@@ -124,8 +114,4 @@ def generate_video(image_folder, bbox_file, output_folder, resize_ratio, gt):
 
     # Release the video writer
     video_writer.release()
-    click.echo(f"Video saved to {output_video_path}")
-
-
-if __name__ == '__main__':
-    main()
+    print(f"Video saved to {output_video_path}")
