@@ -9,15 +9,22 @@ import argparse
 from pathlib import Path
 from inc.video_generation import generate_video_with_labels
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate a video from image frames and bounding box predictions or ground truth.")
+    parser = argparse.ArgumentParser(
+        description="Generate a video from image frames and bounding box predictions or ground truth.")
     parser.add_argument('--dataset_root_path', '-d', required=True, type=Path, help="Path to the dataset root folder")
-    parser.add_argument('--output_folder', '-o', required=True, type=Path, help="Path to the output folder for the video file.")
-    parser.add_argument('--resize', '-r', default=1.0, type=float, help="If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.")
-    parser.add_argument('--bbox_path', '-bb', type=Path, help="Path to the bounding box prediction file (MOT15 format).")
+    parser.add_argument('--output_folder', '-o', required=True, type=Path,
+                        help="Path to the output folder for the video file.")
+    parser.add_argument('--resize', '-r', default=1.0, type=float,
+                        help="If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If "
+                             "greater than 10, width of the output video.")
+    parser.add_argument('--bbox_path', '-bb', type=Path,
+                        help="Path to the bounding box prediction file (MOT15 format).")
     args = parser.parse_args()
 
     generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_path)
+
 
 if __name__ == '__main__':
     main()

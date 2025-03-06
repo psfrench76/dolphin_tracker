@@ -1,19 +1,29 @@
 """
-This module contains a function to generate videos with bounding boxes and labels from a dataset. The function requires a dataset root directory, which should contain an images (settings['images_dir']) directory. If a bbox_file path is provided, then it should be in MOT15 format, as an output from the tracker. If no bbox_file is provided, then the function will look for labels and tracks in the dataset root directory. The output video will be saved to the output_folder.
+This module contains a function to generate videos with bounding boxes and labels from a dataset. The function
+requires a dataset root directory, which should contain an images (settings['images_dir']) directory. If a bbox_file
+path is provided, then it should be in MOT15 format, as an output from the tracker. If no bbox_file is provided,
+then the function will look for labels and tracks in the dataset root directory. The output video will be saved to
+the output_folder.
 """
 
 import cv2
 import re
 import pandas as pd
-from tqdm import tqdm # This is for the progress bar
+from tqdm import tqdm  # This is for the progress bar
 import numpy as np
 from .settings import settings
 
+
 # Args:
-# dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory with individual frames, and optionally a labels directory with ground truth labels in YOLO format. If no bbox_path is provided, then the function will look for labels and tracks in the dataset root directory.
+# dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory
+# with individual frames, and optionally a labels directory with ground truth labels in YOLO format. If no bbox_path
+# is provided, then the function will look for labels and tracks in the dataset root directory.
 # output_folder (Path): Path to the output folder for the video file.
-# resize (float): If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10, width of the output video.
-# bbox_path (Path): Path to the bounding box prediction file (MOT15 format). If provided, the function will use this file to generate the video. If not provided, the function will look for labels and tracks in the dataset root directory.
+# resize (float): If less than 10, ratio by which to resize the frames (e.g., 0.5 for half size). If greater than 10,
+# width of the output video.
+# bbox_path (Path): Path to the bounding box prediction file (MOT15 format). If provided, the function will use this
+# file to generate the video. If not provided, the function will look for labels and tracks in the dataset root
+# directory.
 def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None):
     if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
@@ -28,7 +38,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         all_bboxes = _get_bboxes_from_txt(bbox_path)
         output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
     else:
-        raise ValueError("Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
+        raise ValueError(
+            "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
 
     # Get image files
     image_folder = dataset_root_path / settings['images_dir']
@@ -99,12 +110,15 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                 track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
 
             # Draw bounding box, center point, and track ID
-            cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']), (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
+            cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
+                          (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
             cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
-            cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX, font_scale, track_colors[track_id], 1, cv2.LINE_AA)
+            cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX,
+                        font_scale, track_colors[track_id], 1, cv2.LINE_AA)
 
         # Add frame ID to the lower left corner
-        cv2.putText(frame, f'Frame: {image_file.name}', (10, new_height - 10), cv2.FONT_HERSHEY_DUPLEX, font_scale, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(frame, f'Frame: {image_file.name}', (10, new_height - 10), cv2.FONT_HERSHEY_DUPLEX,
+                    font_scale, (255, 255, 255), 1, cv2.LINE_AA)
 
         # Write the frame to the video
         video_writer.write(frame)
@@ -113,10 +127,12 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     video_writer.release()
     print(f"Video saved to {output_video_path}")
 
+
 def _get_bboxes_from_txt(csv_file):
     bboxes = pd.read_csv(csv_file, header=None)
     bboxes.columns = settings['bbox_file_columns']
     return bboxes
+
 
 def _get_bboxes_from_dataset_root(dataset_root_path):
     labels_dir = dataset_root_path / settings['labels_dir']
@@ -147,15 +163,9 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
     bboxes_df = pd.concat(all_bboxes, ignore_index=True)
     return bboxes_df
 
+
 def _get_bbox_from_yolo_coordinates(x, y, w, h, img_width, img_height):
-    bbox = {
-        'center_x': x * img_width,
-        'center_y': y * img_height,
-        'w': w * img_width,
-        'h': h * img_height,
-        'x_top_left': (x - w / 2) * img_width,
-        'y_top_left': (y - h / 2) * img_height,
-        'x_bottom_right': (x + w / 2) * img_width,
-        'y_bottom_right': (y + h / 2) * img_height
-    }
+    bbox = {'center_x': x * img_width, 'center_y': y * img_height, 'w': w * img_width, 'h': h * img_height,
+        'x_top_left': (x - w / 2) * img_width, 'y_top_left': (y - h / 2) * img_height,
+        'x_bottom_right': (x + w / 2) * img_width, 'y_bottom_right': (y + h / 2) * img_height}
     return {k: int(v) for k, v in bbox.items()}
