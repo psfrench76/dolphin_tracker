@@ -4,8 +4,7 @@ import argparse
 import yaml
 from pathlib import Path
 from src.track import run_tracking_and_evaluation
-from src.utils.inc.video_processing import generate_video_with_labels
-from src.utils.inc.video_processing import extract_frames
+from src.utils.inc.video_processing import generate_video_with_labels, extract_frames
 from src.utils.inc.settings import settings, storage_path, project_path
 import pysrt
 import pandas as pd
