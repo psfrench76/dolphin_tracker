@@ -58,9 +58,8 @@ def main():
         if break_apart:
             print("\nBreaking video into individual frames...\n")
             dataset_path = storage_path(f'data/extracted/{input_name}')
-            image_dir_path = dataset_path / image_dir_name
-            image_height = extract_frames(input_path, image_dir_path)
-            summary_log += f"Video broken into individual frames and stored in {image_dir_path}\n"
+            image_height = extract_frames(input_path, dataset_path)
+            summary_log += f"Video broken into individual frames and stored in {dataset_path / image_dir_name}\n"
         else:
             # TODO - implement mp4/mov input for tracker. Set image_height
             dataset_path = input_path

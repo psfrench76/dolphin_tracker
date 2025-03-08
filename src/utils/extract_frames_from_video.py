@@ -7,9 +7,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Extract frames from a video.")
     parser.add_argument('input_video', type=Path, help="Path to the video file.")
-    parser.add_argument('output_folder', type=Path, help="Path to the output folder for the frames.")
+    parser.add_argument('dataset_root_path', type=Path, help="Path to the dataset root for the frames. The frames will be saved in DATASET_ROOT_PATH/images.")
     args = parser.parse_args()
-    extract_frames(args.input_video, args.output_folder)
+    extract_frames(args.input_video, args.dataset_root_path)
 
 if __name__ == '__main__':
     main()

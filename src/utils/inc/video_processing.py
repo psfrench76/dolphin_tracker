@@ -9,11 +9,10 @@ the output_folder.
 import cv2
 import re
 import pandas as pd
-from tqdm import tqdm  # This is for the progress bar
 import numpy as np
 import subprocess
-import click
-import os
+from tqdm import tqdm  # This is for the progress bar
+from pathlib import Path
 from PIL import Image
 from .settings import settings
 
@@ -132,32 +131,33 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     print(f"Video saved to {output_video_path}")
 
 
-def extract_frames(input_video, output_folder):
-    """
-    Extract frames from INPUT_VIDEO and save them as jpg files in OUTPUT_FOLDER.
-    The frames will be named [original_mp4_name]_[frame_number].jpg with zero-padded frame numbers.
-    """
-
+# Extract frames from INPUT_VIDEO and save them as jpg files in DATASET_ROOT_PATH/images.
+# The frames will be named [original_mp4_name]_[frame_number].jpg with zero-padded frame numbers.
+def extract_frames(input_video, dataset_root_path):
     # Ensure the output folder exists
-    os.makedirs(output_folder, exist_ok=True)
+    if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
+        raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
+
+    dataset_root_path = Path(dataset_root_path)
+    output_folder = dataset_root_path / settings['images_dir']
+    output_folder.mkdir(parents=True, exist_ok=True)
 
     # Get the video name without extension
-    video_name = os.path.splitext(os.path.basename(input_video))[0]
+    video_name = input_video.stem
 
-    # Use FFmpeg with GPU acceleration to extract frames
+    # Use FFmpeg to extract frames
     ffmpeg_command = [
         'ffmpeg',
-        # '-hwaccel', 'cuda',  # Use CUDA for hardware acceleration if available
-        '-i', input_video,
-        f'{output_folder}/{video_name}_%06d.jpg'
+        '-i', str(input_video),
+        str(output_folder / f'{video_name}_%06d.jpg')
     ]
 
     subprocess.run(ffmpeg_command)
 
-    click.echo(f"Frames extracted from {input_video} into {output_folder}.")
+    print(f"Frames extracted from {input_video} into {output_folder}.")
 
     # Get the height of one of the extracted frames
-    first_frame_path = os.path.join(output_folder, f'{video_name}_000001.jpg')
+    first_frame_path = output_folder / f'{video_name}_000001.jpg'
     with Image.open(first_frame_path) as img:
         image_height = img.height
 
