@@ -62,7 +62,7 @@ def main():
 
         if break_apart:
             print("\nBreaking video into individual frames...\n")
-            dataset_path = storage_path(f'data/extracted/{input_name}')
+            dataset_path = storage_path(f"{settings['data_dir']}/{settings['extracted_frames_dir']}/{input_name}")
             extract_frames(input_path, dataset_path)
             summary_log.add(f"Video broken into individual frames and stored in {dataset_path / image_dir_name}")
         else:
@@ -96,7 +96,7 @@ def main():
 
         print(f"Using SRT file at {srt_path}")
 
-    output_dir_path = storage_path(f"output/tracker/{input_name}")
+    output_dir_path = storage_path(f"{settings['output_dir']}/{settings['tracker_output_dir']}/{input_name}")
     output_dir_path.mkdir(parents=True, exist_ok=True)
     arg_outfile_path = output_dir_path / settings['args_file']
 

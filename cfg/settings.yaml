@@ -13,6 +13,10 @@ drone_profile_dir: 'cfg/drones' # Subdirectory of project root
 user_settings_dir: 'usr' # Subdirectory of project root
 detector_runs_dir: 'runs' # Subdirectory of storage root
 logs_dir: 'logs' # Subdirectory of storage root
+data_dir: 'data' # Subdirectory of storage root
+output_dir: 'output' # Subdirectory of storage root
+tracker_output_dir: 'tracker' # Subdirectory of output_dir
+extracted_frames_dir: 'extracted' # Subdirectory of data_dir
 log_results_dir: 'results' # Subdirectory of logs_dir
 log_slurm_dir: 'slurm' # Subdirectory of logs_dir
 training_log_prefix: 'train' # Prefix for training log files
