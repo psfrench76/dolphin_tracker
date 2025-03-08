@@ -3,3 +3,5 @@ motmetrics
 click
 lap
 shapely
+notebook
+tensorboard
