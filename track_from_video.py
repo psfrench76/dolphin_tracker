@@ -21,7 +21,15 @@ def main():
                         help="Generate a video of the ground truth labels.")
     parser.add_argument('--break_apart', '-b', action='store_true',
                         help="Break video into individual frames and store in a dataset directory.")
-    parser.add_argument('--srt', '-srt', help="Path to an SRT file corresponding to the video input.")
+    parser.add_argument('--srt', '-srt', type=Path, help="Path to an SRT file corresponding to the video input.")
+
+    parser.add_argument('--model', '-m', type=Path, help="Path to the model (weights) file.")
+    parser.add_argument('--tracker', '-t', type=Path, help="Path to the tracker file.")
+    parser.add_argument('--drone_config', '-dc', type=str, help=f"Drone configuration file, in the {settings['drone_profile_dir']} directory")
+    parser.add_argument('--resize_ratio', '-rr', type=float, help="Resize ratio for the video. Only one of -rr, -rw should be used.")
+    parser.add_argument('--resize_width', '-rw', type=int, help="Width in pixels to resize the video to. Only one of -rr, -rw should be used.")
+    parser.add_argument('--calibration', '-c', type=float, help="Calibration factor for converting pixels to meters in output.csv. This will be multiplied to the final value as determined by the drone configuration. Overrides the calibration factor in the drone configuraton.")
+    parser.add_argument('--altitude', '-a', type=float, help="Manual altitude in meters for the full video, for converting pixels to meters in output.csv. This can take the place of an SRT file if one is missing.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -34,15 +42,11 @@ def main():
 
     summary_log = "--------------------------------------------\n\n"
 
-    # TODO: make model and tracker and resize into optional arguments
-    # TODO: allow for custom output path?
-    model_path = storage_path(settings['default_detector'])
-    tracker_path = project_path(settings['default_tracker'])
+    model_path = args.model or storage_path(settings['default_detector'])
+    tracker_path = args.tracker or project_path(settings['default_tracker'])
 
-    resize_ratio = settings['default_video_resize_ratio']
     image_dir_name = settings['images_dir']
     label_dir_name = settings['labels_dir']
-    # TODO: make resize ratio an argument, in pixels instead of ratio (generate_video should distinguish)
 
     if input_path.is_file():
         if args.ground_truth_video:
@@ -111,18 +115,28 @@ def main():
 
     output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
 
-    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, srt_path=srt_path)
+    run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, srt_path=srt_path,
+                                drone_profile=args.drone_config, calibration=args.calibration,
+                                manual_altitude=args.altitude)
 
     summary_log += f"Tracking and evaluation complete. CSV results can be found in " \
                    f"{output_dir_path / output_filename}\n"
 
     print(f"\nTracking and evaluation complete.\n")
 
+    # The resize argument in generate_video_with_labels can be either a ratio or a pixel width
+    if args.resize_ratio:
+        resize = args.resize_ratio
+    elif args.resize_width:
+        resize = args.resize_width
+    else:
+        resize = settings['default_video_resize_ratio']
+
     if args.prediction_video:
         print(f"Generating prediction video...")
 
         results_file_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
-        generate_video_with_labels(dataset_path, output_dir_path, resize_ratio, results_file_path)
+        generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path)
 
         video_filename = f"{input_name}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename

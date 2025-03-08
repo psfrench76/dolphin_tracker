@@ -29,9 +29,10 @@ else:
 @click.option('--srt', help="Path to an SRT file corresponding to the video input.")
 @click.option('--drone', help="Drone profile for GSD calculation.")
 @click.option('--altitude', help="Manual altitude in meters for GSD calculation. Overrides SRT altitude if present.")
-def main(dataset, model, output, tracker, botsort, nopersist, srt, drone, altitude):
+@click.option('--calibration', help="Manual calibration factor for GSD calculation.")
+def main(dataset, model, output, tracker, botsort, nopersist, srt, drone, altitude, calibration):
     results = run_tracking_and_evaluation(dataset, model, output, tracker, botsort, nopersist, srt_path=srt,
-                                          drone_profile=drone, manual_altitude=altitude)
+                                          drone_profile=drone, manual_altitude=altitude, calibration=calibration)
 
 
 class DolphinTracker:
@@ -82,7 +83,8 @@ class DolphinTracker:
         return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
                                             persist=(not self.nopersist), iou=self.iou, stream=True)
 
-    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None, manual_altitude=None):
+    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None, manual_altitude=None,
+                             calibration=None):
         files = list(image_dir_path.glob('*.jpg'))
         files.sort()
         pattern = r"(\d+)(?=[._](jpg))"
@@ -103,7 +105,7 @@ class DolphinTracker:
             self.load_manual_altitudes(camera_df, float(manual_altitude))
 
         if camera_df is not None:
-            self.calculate_gsd(camera_df, drone_profile)
+            self.calculate_gsd(camera_df, drone_profile, calibration)
 
         data = []
         researcher_data = []
@@ -370,8 +372,9 @@ class DolphinTracker:
 
         return df
 
-    def calculate_gsd(self, df, drone_profile):
-        drone_profile_path = project_path(settings['drone_profile_dir']) / f"{drone_profile}.yaml"
+    def calculate_gsd(self, df, drone_profile, calibration=None):
+        drone_profile = Path(drone_profile)
+        drone_profile_path = project_path(settings['drone_profile_dir']) / f"{drone_profile.stem}.yaml"
         with open(drone_profile_path, 'r') as file:
             drone_settings = yaml.safe_load(file)
 
@@ -442,13 +445,16 @@ class DolphinTracker:
         else:
             raise ValueError(f"Invalid GSD calculation mode: {drone_settings['gsd_calculation_mode']}")
 
-        if 'manual_calibration_factor' in drone_settings:
-            df['GSD_cmpx'] *= drone_settings['manual_calibration_factor']
-            print(f"Applied manual calibration factor of {drone_settings['manual_calibration_factor']}")
+        if not calibration and 'manual_calibration_factor' in drone_settings:
+            calibration = drone_settings['manual_calibration_factor']
+
+        if calibration:
+            df['GSD_cmpx'] *= calibration
+            print(f"Applied manual calibration factor of {calibration}")
 
 
-def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False,
-                                nopersist=False, camera_df=None, srt_path=None, drone_profile=None, manual_altitude=None):
+def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False, nopersist=False,
+                                camera_df=None, srt_path=None, drone_profile=None, manual_altitude=None, calibration=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -459,7 +465,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
 
     tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
     results = tracker.track_from_images(image_dir_path)
-    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude)
+    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude, calibration)
     metrics = tracker.evaluate(label_dir_path)
 
     return metrics
