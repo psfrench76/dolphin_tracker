@@ -6,15 +6,11 @@ from pathlib import Path
 from src.track import run_tracking_and_evaluation
 from src.utils.inc.video_processing import generate_video_with_labels, extract_frames
 from src.utils.inc.settings import settings, storage_path, project_path
-import pysrt
-import pandas as pd
-import re
-from PIL import Image
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('input_data', help="Path to the video or dataset.")
+    parser.add_argument('input_data', type=Path, help="Path to the video or dataset.")
     parser.add_argument('--prediction_video', '-pv', action='store_true',
                         help="Generate a video of the tracking results.")
     parser.add_argument('--ground_truth_video', '-gv', action='store_true',
@@ -22,31 +18,36 @@ def main():
     parser.add_argument('--break_apart', '-b', action='store_true',
                         help="Break video into individual frames and store in a dataset directory.")
     parser.add_argument('--srt', '-srt', type=Path, help="Path to an SRT file corresponding to the video input.")
-
     parser.add_argument('--model', '-m', type=Path, help="Path to the model (weights) file.")
     parser.add_argument('--tracker', '-t', type=Path, help="Path to the tracker file.")
-    parser.add_argument('--drone_config', '-dc', type=str, help=f"Drone configuration file, in the {settings['drone_profile_dir']} directory")
-    parser.add_argument('--resize_ratio', '-rr', type=float, help="Resize ratio for the video. Only one of -rr, -rw should be used.")
-    parser.add_argument('--resize_width', '-rw', type=int, help="Width in pixels to resize the video to. Only one of -rr, -rw should be used.")
-    parser.add_argument('--calibration', '-c', type=float, help="Calibration factor for converting pixels to meters in output.csv. This will be multiplied to the final value as determined by the drone configuration. Overrides the calibration factor in the drone configuraton.")
-    parser.add_argument('--altitude', '-a', type=float, help="Manual altitude in meters for the full video, for converting pixels to meters in output.csv. This can take the place of an SRT file if one is missing.")
+    parser.add_argument('--drone_config', '-dc', type=str,
+                        help=f"Drone configuration file, in the {settings['drone_profile_dir']} directory")
+    parser.add_argument('--resize_ratio', '-rr', type=float,
+                        help="Resize ratio for the video. Only one of -rr, -rw should be used.")
+    parser.add_argument('--resize_width', '-rw', type=int,
+                        help="Width in pixels to resize the video to. Only one of -rr, -rw should be used.")
+    parser.add_argument('--calibration', '-c', type=float,
+                        help="Calibration factor for converting pixels to meters in output.csv. This will be "
+                             "multiplied to the final value as determined by the drone configuration. Overrides the "
+                             "calibration factor in the drone configuraton.")
+    parser.add_argument('--altitude', '-a', type=float,
+                        help="Manual altitude in meters for the full video, for converting pixels to meters in "
+                             "output.csv. This can take the place of an SRT file if one is missing.")
 
     args = parser.parse_args()
     run_args = vars(args)
 
     break_apart = args.break_apart
-    input_path = Path(args.input_data)
-    srt_path = Path(args.srt) if args.srt else None
+    input_path = args.input_data
+    srt_path = args.srt
     input_name = input_path.stem
-    image_height = None
-
-    summary_log = "--------------------------------------------\n\n"
-
-    model_path = args.model or storage_path(settings['default_detector'])
-    tracker_path = args.tracker or project_path(settings['default_tracker'])
-
+    summary_log = SummaryLog()
     image_dir_name = settings['images_dir']
     label_dir_name = settings['labels_dir']
+
+    # Argument parsing and checking
+    model_path = args.model or storage_path(settings['default_detector'])
+    tracker_path = args.tracker or project_path(settings['default_tracker'])
 
     if input_path.is_file():
         if args.ground_truth_video:
@@ -57,22 +58,22 @@ def main():
         if args.prediction_video:
             break_apart = True
             print("\n Will break video into individual frames so that prediction video can be generated\n")
-            summary_log += "Broke video into individual frames so that prediction video could be generated\n"
+            summary_log.add("Broke video into individual frames so that prediction video could be generated")
 
         if break_apart:
             print("\nBreaking video into individual frames...\n")
             dataset_path = storage_path(f'data/extracted/{input_name}')
-            image_height = extract_frames(input_path, dataset_path)
-            summary_log += f"Video broken into individual frames and stored in {dataset_path / image_dir_name}\n"
+            extract_frames(input_path, dataset_path)
+            summary_log.add(f"Video broken into individual frames and stored in {dataset_path / image_dir_name}")
         else:
-            # TODO - implement mp4/mov input for tracker. Set image_height
+            # TODO - implement mp4/mov input for tracker.
             dataset_path = input_path
             raise ValueError("Video input for tracker not implemented yet")
 
     elif input_path.is_dir():
         if break_apart:
             print("Ignoring --break_apart flag as input is a directory.")
-            summary_log += f"Ignored --break_apart flag as input {input_path} is a directory.\n"
+            summary_log.add(f"Ignored --break_apart flag as input {input_path} is a directory.")
 
         if args.ground_truth_video and not (input_path / label_dir_name).is_dir():
             raise FileNotFoundError(f"Dataset folder must contain a '{label_dir_name}' directory in order "
@@ -85,11 +86,6 @@ def main():
             input_name = input_path.parent.name + '_' + input_name
 
         dataset_path = input_path
-
-        any_frame_Path = next((input_path / image_dir_name).glob('*.jpg'))
-        with Image.open(any_frame_Path) as img:
-            image_height = img.height
-
 
     else:
         raise ValueError("Input data must be a file or a directory.")
@@ -119,8 +115,8 @@ def main():
                                 drone_profile=args.drone_config, calibration=args.calibration,
                                 manual_altitude=args.altitude)
 
-    summary_log += f"Tracking and evaluation complete. CSV results can be found in " \
-                   f"{output_dir_path / output_filename}\n"
+    summary_log.add(f"Tracking and evaluation complete. CSV results can be found in "
+                    f"{output_dir_path / output_filename}")
 
     print(f"\nTracking and evaluation complete.\n")
 
@@ -141,19 +137,32 @@ def main():
         video_filename = f"{input_name}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename
         print(f"Prediction video output written to {video_path}")
-        summary_log += f"Prediction video output written to {video_path}\n"
+        summary_log.add(f"Prediction video output written to {video_path}")
 
     if args.ground_truth_video:
         print(f"Generating ground truth video...")
 
-        generate_video_with_labels(dataset_path, output_dir_path, resize_ratio)
+        generate_video_with_labels(dataset_path, output_dir_path, resize)
 
         video_filename = f"{input_name}_{settings['gt_video_suffix']}"
         video_path = output_dir_path / video_filename
         print(f"Ground truth video output written to {video_path}")
-        summary_log += f"Ground truth video output written to {video_path}\n"
+        summary_log.add(f"Ground truth video output written to {video_path}")
 
     print(summary_log)
+
+
+class SummaryLog:
+
+    def __init__(self):
+        self.log = "\n--------------------------------------------\n\n"
+
+    def add(self, message):
+        self.log += message + "\n"
+
+    def __str__(self):
+        return self.log
+
 
 if __name__ == '__main__':
     main()
