@@ -5,3 +5,4 @@ lap
 shapely
 notebook
 tensorboard
+pysrt
