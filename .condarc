@@ -1,0 +1,5 @@
+pkgs_dirs:
+  - /nfs/hpc/share/dolphin-tracking/.conda/pkgs
+
+envs_dirs:
+  - /nfs/hpc/share/dolphin-tracking/.conda/envs
