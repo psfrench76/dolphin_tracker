@@ -7,7 +7,7 @@ to improve file transfer time).
 
 import argparse
 from pathlib import Path
-from inc.video_generation import generate_video_with_labels
+from inc.video_processing import generate_video_with_labels
 
 
 def main():

@@ -4,8 +4,8 @@ import argparse
 import yaml
 from pathlib import Path
 from src.track import run_tracking_and_evaluation
-from src.utils.inc.video_generation import generate_video_with_labels
-from utils.parse_video import extract_frames
+from src.utils.inc.video_processing import generate_video_with_labels
+from src.utils.inc.video_processing import extract_frames
 from src.utils.inc.settings import settings, storage_path, project_path
 import pysrt
 import pandas as pd
@@ -35,7 +35,7 @@ def main():
 
     summary_log = "--------------------------------------------\n\n"
 
-    # TODO: make model and tracker into optional arguments
+    # TODO: make model and tracker and resize into optional arguments
     # TODO: allow for custom output path?
     model_path = storage_path(settings['default_detector'])
     tracker_path = project_path(settings['default_tracker'])
