@@ -1,0 +1,35 @@
+# An option which determines how the Ground Sampling Distance (GSD) is calculated. Valid options are "sensor", "focal", and "fov"
+# sensor: The ground sampling distance is calculated using the sensor height and width in mm, and the focal length from the SRT file.
+# focal: The ground sampling distance is calculated using the sensor height and width in mm, using a hardcoded focal length in mm.
+# fov: The ground sampling distance is calculated using the camera's field of view in degrees.
+gsd_calculation_mode: focal
+
+# Manual calibration factor is used for all GSD calculations in all modes. It is applied by multiplication to the GSD after all calculations.
+# This is to account for the uncertainty in all of the calcuation inputs. 1.0 has no affect.
+manual_calibration_factor: 1.0
+
+# The sensor height and width in mm. These are used in 'sensor' and 'focal' modes.
+# Sensor heights and widths are not the simplest specs to find as they are not always published publicly.
+# Google is your friend here. Support forums sometimes have answers.
+sensor_height_mm: 8.8
+sensor_width_mm: 13.2
+
+# The focal length of the camera in mm. This is used in 'focal' mode.
+# Note that this is NOT the same as the 35mm equivalent focal length.
+# This is equal to the focal length in 35mm equivalent divided by the crop factor.
+focal_length_mm: 8.8
+
+# Focal length multiplier is used in 'sensor' mode.
+# The focal length multiplier is used to convert the focal length in SRT files to mm. Usually this is 0.1.
+focal_length_multiplier: 0.1
+
+# The crop factor is used in 'sensor' mode.
+# The crop factor is used to convert the 35-mm-equivalent focal length in SRT files to true mm.
+crop_factor: 5.64
+
+# FOV is used in 'fov' mode.
+# The camera vertical field of view in degrees. Note that this is not the same as the published FOV; these values are
+# calculated empirically.
+camera_vertical_fov_deg: 40
+camera_horizontal_fov_deg: 70
+
