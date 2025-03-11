@@ -2,7 +2,7 @@
 # sensor: The ground sampling distance is calculated using the sensor height and width in mm, and the focal length from the SRT file.
 # focal: The ground sampling distance is calculated using the sensor height and width in mm, using a hardcoded focal length in mm.
 # fov: The ground sampling distance is calculated using the camera's field of view in degrees.
-gsd_calculation_mode: focal
+gsd_calculation_mode: fov
 
 # Manual calibration factor is used for all GSD calculations in all modes. It is applied by multiplication to the GSD after all calculations.
 # This is to account for the uncertainty in all of the calcuation inputs. 1.0 has no affect.

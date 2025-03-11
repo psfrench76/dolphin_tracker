@@ -47,10 +47,10 @@ class DolphinTracker:
         self.nopersist = nopersist
         self.last_img_height = None
 
-        if tracker_path is None or tracker_path == "Default":
-            self.tracker_path = project_path(settings['ultralytics_bytetrack'])
         if self.botsort:
             self.tracker_path = project_path(settings['ultralytics_botsort'])
+        elif tracker_path is None or tracker_path == "Default":
+            self.tracker_path = project_path(settings['ultralytics_bytetrack'])
         else:
             self.tracker_path = Path(tracker_path)
 
@@ -231,7 +231,7 @@ class DolphinTracker:
 
         # Read and process each file
         for label_path in files:
-            pattern = r"(\d+)(?=[._](txt))"
+            pattern = r"(\d+)(?=[._](txt|jpg\.rf))" # Roboflow files have _jpg. followed by a hash then .txt; this gets those
             match = re.search(pattern, str(label_path))
             if not match:
                 raise ValueError(f"Could not process filename {label_path}")
@@ -381,6 +381,7 @@ class DolphinTracker:
         if drone_settings['gsd_calculation_mode'] == 'fov':
             # For 90 deg overhead videos:
             # tan(fov/2) = (field_height_m/2) / altitude_m
+            # equivalently:
             # field_height_m = 2 * altitude_m * tan(fov/2)
             # GSD_mpx = field_height_m / image_height_px
             # GSD_cmpx = GSD_mpx * 100
