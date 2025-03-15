@@ -25,7 +25,8 @@ if user_settings_path.is_file():
     with open(user_settings_path, 'r') as f:
         user_settings = yaml.safe_load(f)
 
-settings.update(user_settings)
+if user_settings is not None:
+    settings.update(user_settings)
 
 storage_root = Path(settings['storage_root']).resolve()
 
