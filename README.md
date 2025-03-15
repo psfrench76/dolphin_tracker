@@ -8,6 +8,9 @@ module load cuda/12.4 \
 conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia \
 pip install -r requirements.txt 
 
+Set up automatic group permissions for storage root:
+setfacl -d -m "u::rwx,g::rwx,o::-" ..
+
 mkdir ../saves
 mkdir ../saves/pretrained
 
