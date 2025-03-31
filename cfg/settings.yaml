@@ -78,6 +78,12 @@ dolphin_classes:
   - box
   - rectangle
 
+head_classes:
+  - Head
+
+tail_classes:
+    - Tail
+
 # Tracking output file settings
 bbox_file_columns:
     - 'frame'

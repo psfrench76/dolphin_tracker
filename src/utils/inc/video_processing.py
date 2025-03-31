@@ -32,6 +32,7 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
     run_name = output_folder.name
+    output_folder.mkdir(parents=True, exist_ok=True)
 
     # Get bounding boxes
     if not bbox_path:

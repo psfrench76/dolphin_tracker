@@ -2,10 +2,12 @@
 This file holds the core functionality of the dataset conversion toolset. It is designed to be used as a module
 by other scripts, and is not intended to be run directly. See the function comments for descriptions of functionality.
 """
+from mpl_toolkits.mplot3d.art3d import line_collection_2d_to_3d
 
 from .settings import settings
 from pathlib import Path
 import json
+import math
 
 
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
@@ -23,7 +25,8 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     frame_stats = {'unique_labels': 0,  # Total unique labels (not frames, some frames have 0 or 2+ labels)
                    'duplicate_labels': 0,  # Total duplicate labels (bounding boxes are identical)
                    'negative_coordinates_trimmed': 0,  # Total labels with negative coordinates trimmed
-                   'duplicate_tracks_renumbered': 0  # Total duplicate tracks renumbered
+                   'duplicate_tracks_renumbered': 0,  # Total duplicate tracks renumbered
+                   'dolphins_without_keypoints': 0 # Total dolphins without keypoints
                    }
     dataset_dir_path = Path(dataset_dir_path)
     label_dir_path = dataset_dir_path / settings['labels_dir']
@@ -35,8 +38,14 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, unique_stats = _load_unique_labels(json_file_path)  # Loads labels and deduplicates them
-    trim_stats = _trim_negative_coordinates(labels)  # Trims labels with negative coordinates
+    labels, tracks, keypoints, unique_stats = _load_unique_labels(json_file_path, oriented_bbox=oriented_bbox)  # Loads labels and deduplicates them
+    #print(labels)
+    #print(tracks)
+    #print(keypoints)
+    #print(json_file_path.stem)
+    if oriented_bbox:
+        labels = _convert_labels_to_oriented(labels, keypoints)
+    trim_stats = _trim_negative_coordinates(labels, oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
     _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
     dedup_stats = _deduplicate_tracks(tracks)  # Deduplicate tracks (different from labels)
 
@@ -45,7 +54,6 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     frame_stats.update(dedup_stats)
 
     if oriented_bbox:
-        _convert_labels_to_oriented(labels)
         _write_obb_label(labels, label_file_path)
     else:
         _write_label(labels, label_file_path)
@@ -86,6 +94,13 @@ def print_run_stats(run_stats):
             print(f"Total duplicate tracks renumbered: {total_duplicate_tracks}")
             if total_duplicate_tracks > 0:
                 print(f"Duplicate tracks renumbered by frame:")
+                for k, v in sorted(value.items()):
+                    if v > 0:
+                        print(f"  {k}: {v}")
+        elif key == 'dolphins_without_keypoints':
+            if sum(value.values()) > 0:
+                print(f"Total dolphins without keypoints: {sum(value.values())}")
+                print(f"Dolphins without keypoints by frame:")
                 for k, v in sorted(value.items()):
                     if v > 0:
                         print(f"  {k}: {v}")
@@ -148,14 +163,19 @@ def _write_label(labels, label_file_path):
 def _write_obb_label(labels, label_file_path):
     with open(label_file_path, 'w') as out_file:
         for label in labels:
-            pass
+            x1, y1, x2, y2, x3, y3, x4, y4 = label
+            out_file.write(f"0 {x1} {y1} {x2} {y2} {x3} {y3} {x4} {y4}\n")
+            out_file.write(f"0 {x1} {y1} {x2} {y2} {x3} {y3} {x4} {y4}\n")
 
 
 # Label load, normalization, conversion, and deduplication
-def _load_unique_labels(json_file_path):
+def _load_unique_labels(json_file_path, oriented_bbox=False):
     labels = []
     tracks = []
-    stats = {'unique_labels': 0, 'duplicate_labels': 0}
+    heads = {}
+    tails = {}
+    keypoints = []
+    stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0}
 
     with open(json_file_path, 'r') as file:
         data = json.load(file)
@@ -164,81 +184,180 @@ def _load_unique_labels(json_file_path):
     image_height = data['imageHeight']
 
     for shape in data['shapes']:
-        if shape['label'] not in settings['dolphin_classes']:
-            continue
+        if shape['label'] in settings['head_classes']:
+            group_id = shape['group_id'] or 0
+            head_x = shape['points'][0][0] / image_width
+            head_y = shape['points'][0][1] / image_height
+            heads[group_id] = (head_x, head_y)
+        elif shape['label'] in settings['tail_classes']:
+            group_id = shape['group_id'] or 0
+            tail_x = shape['points'][0][0] / image_width
+            tail_y = shape['points'][0][1] / image_height
+            tails[group_id] = (tail_x, tail_y)
+        elif shape['label'] in settings['dolphin_classes']:
+            # Extract points
+            points = shape['points']
+            group_id = shape['group_id'] or 0
 
-        # Extract points
-        points = shape['points']
-        group_id = shape['group_id'] or 0
+            if len(points) != 4:
+                continue
 
-        if len(points) != 4:
-            continue
+            # Calculate bounding box
+            x_coords = [p[0] for p in points]
+            y_coords = [p[1] for p in points]
 
-        # Calculate bounding box
-        x_coords = [p[0] for p in points]
-        y_coords = [p[1] for p in points]
+            x_min = min(x_coords)
+            y_min = min(y_coords)
+            x_max = max(x_coords)
+            y_max = max(y_coords)
 
-        x_min = min(x_coords)
-        y_min = min(y_coords)
-        x_max = max(x_coords)
-        y_max = max(y_coords)
+            # Normalize coordinates to YOLO format
+            x_center = (x_min + x_max) / 2 / image_width
+            y_center = (y_min + y_max) / 2 / image_height
+            width = (x_max - x_min) / image_width
+            height = (y_max - y_min) / image_height
 
-        # Normalize coordinates to YOLO format
-        x_center = (x_min + x_max) / 2 / image_width
-        y_center = (y_min + y_max) / 2 / image_height
-        width = (x_max - x_min) / image_width
-        height = (y_max - y_min) / image_height
+            new_label = (x_center, y_center, width, height)
 
-        new_label = (x_center, y_center, width, height)
+            if new_label not in labels:
+                labels.append((x_center, y_center, width, height))
+                tracks.append(group_id)
+                stats['unique_labels'] += 1
+            else:
+                stats['duplicate_labels'] += 1
 
-        if new_label not in labels:
-            labels.append((x_center, y_center, width, height))
-            tracks.append(group_id)
-            stats['unique_labels'] += 1
-        else:
-            stats['duplicate_labels'] += 1
+    # Reprocess to ensure keypoints and labels are aligned
+    if oriented_bbox:
+        for i, (label, track) in reversed(list(enumerate(zip(labels, tracks)))):
+            if track in heads and track in tails:
+                head_x, head_y = heads[track]
+                tail_x, tail_y = tails[track]
+                keypoints.append((head_x, head_y, tail_x, tail_y))
+            else:
+                stats['dolphins_without_keypoints'] += 1
+                stats['unique_labels'] -= 1
+                labels.pop(i)
+                tracks.pop(i)
 
-    return labels, tracks, stats
+    return labels, tracks, keypoints, stats
 
 
 # Trim negative coordinates to 0 and adjust width or height to maintain the inner edge of the box
-def _trim_negative_coordinates(labels):
+def _trim_negative_coordinates(labels, oriented_bbox=False):
     stats = {'negative_coordinates_trimmed': 0}
     for i, label in enumerate(labels):
-        x_center, y_center, width, height = label
+        if oriented_bbox:
+            x1, y1, x2, y2, x3, y3, x4, y4 = label
+            if x1 < 0 or y1 < 0 or x2 < 0 or y2 < 0 or x3 < 0 or y3 < 0 or x4 < 0 or y4 < 0:
+                stats['negative_coordinates_trimmed'] += 1
+                raise NotImplementedError("Oriented bounding box trimming not yet implemented.")
 
-        # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in the
-        # frame should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the width or
-        # height by 2 * the negative coordinate -- this pulls the negative edge of the box slightly closer while
-        # maintaining the center as close as possible to the original center.
+        else:
+            x_center, y_center, width, height = label
 
-        # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an edge
-        # case
+            # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in the
+            # frame should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the width or
+            # height by 2 * the negative coordinate -- this pulls the negative edge of the box slightly closer while
+            # maintaining the center as close as possible to the original center.
 
-        if x_center < 0 or y_center < 0:
-            stats['negative_coordinates_trimmed'] += 1
+            # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an edge
+            # case
 
-        if x_center < 0:
-            x_start = x_center
-            x_width = width
-            x_width += 2 * x_start
-            labels[i] = (0, y_center, x_width, height)
+            if x_center < 0 or y_center < 0:
+                stats['negative_coordinates_trimmed'] += 1
 
-        if y_center < 0:
-            y_start = y_center
-            y_height = height
-            y_height += 2 * y_start
-            labels[i] = (x_center, 0, width, y_height)
+            if x_center < 0:
+                x_start = x_center
+                x_width = width
+                x_width += 2 * x_start
+                labels[i] = (0, y_center, x_width, height)
+
+            if y_center < 0:
+                y_start = y_center
+                y_height = height
+                y_height += 2 * y_start
+                labels[i] = (x_center, 0, width, y_height)
 
     return stats
 
 
-# This is a placeholder for oriented bounding box labels, which are not yet implemented
-def _convert_labels_to_oriented(labels):
-    for i, label in enumerate(labels):
+def _convert_labels_to_oriented(labels, keypoints_list):
+    new_labels = []
+    for i, (label, keypoints) in enumerate(zip(labels, keypoints_list)):
         x_center, y_center, width, height = label
-        pass
+        head_x, head_y, tail_x, tail_y = keypoints
 
+        # Calculate the angle of the dolphin
+        angle = math.atan2(tail_y - head_y, tail_x - head_x)
+
+        # Generate a rectangle containing the full original bounding box
+
+        #TODO - I think Ultralytics does some interpretation of the orientation based on the angle of the box, so
+        # the point order may be inconsistent - won't be able to investigate until I have the full visualization pipeline
+
+        # TODO: Filter angles. exactly 0, 90 degrees should just inherit the original bounding box. Other angles should
+        #   be clamped.
+
+        #print(f"Index: {i}, Angle: {angle}")
+
+        if angle == 0 or angle == math.pi / 2:
+            new_labels.append((x_center - width/2, y_center + height/2,
+                                 x_center + width/2, y_center + height/2,
+                                 x_center + width/2, y_center - height/2,
+                                 x_center - width/2, y_center - height/2))
+            continue
+
+        # Normalize to between 0 and 90 degrees for the sake of rectangle generation
+        while angle < 0:
+            angle += math.pi / 2
+
+        while angle > math.pi / 2:
+            angle -= math.pi / 2
+
+        #print(f"Index: {i}, Normalized angle: {angle}")
+
+        # Calculate the 4 lines defining the new bounding box, normalized around origin
+        slope1 = math.tan(angle)
+        slope2 = 1 / slope1
+        intercept1 = slope1 * width/2 + height/2
+        intercept2 = math.tan(angle + math.pi / 2) * width/2 - height/2
+        line1 = (-slope1, intercept1)
+        line2 = (slope2, intercept2)
+        line3 = (-slope1, -intercept1)
+        line4 = (slope2, -intercept2)
+
+        #print(f"Index: {i}, Lines: {line1}, {line2}, {line3}, {line4}")
+
+        x1, y1 = _line_intersection(line1, line2)
+        x2, y2 = _line_intersection(line2, line3)
+        x3, y3 = _line_intersection(line3, line4)
+        x4, y4 = _line_intersection(line4, line1)
+
+        x1 += x_center
+        y1 += y_center
+        x2 += x_center
+        y2 += y_center
+        x3 += x_center
+        y3 += y_center
+        x4 += x_center
+        y4 += y_center
+
+        #print(f"Index: {i}, Points: {x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {x4}, {y4}")
+
+        new_labels.append((x1, y1, x2, y2, x3, y3, x4, y4))
+
+    #print(labels)
+    #print(new_labels)
+
+    return new_labels
+
+# Finds the x and y coordinates of the intersection of two lines, given as slope and intercept.
+def _line_intersection(line1, line2):
+    slope1, intercept1 = line1
+    slope2, intercept2 = line2
+    x = (intercept2 - intercept1) / (slope1 - slope2)
+    y = slope1 * x + intercept1
+    return x, y
 
 # Increments a tracks array by a specified amount
 def _increment_all_tracks(tracks, amount=1):
