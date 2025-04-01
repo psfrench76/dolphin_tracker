@@ -15,7 +15,7 @@ from tqdm import tqdm  # This is for the progress bar
 from pathlib import Path
 from PIL import Image
 from .settings import settings
-
+from .oriented_bounding_boxes import get_orientation_arrow_point
 
 # Args:
 # dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory
@@ -45,12 +45,12 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         raise ValueError(
             "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
 
-    if all_bboxes.shape[1] == 6:
+    if all_bboxes.shape[1] == 6 or all_bboxes.shape[1] == 9:
         oriented_bbox = False
-    elif all_bboxes.shape[1] == 10:
+    elif all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
         oriented_bbox = True
     else:
-        raise ValueError(f"Bounding boxes do not have the correct number of columns. Found {all_bboxes.shape[1]}, expected 6 or 10.")
+        raise ValueError(f"Bounding boxes do not have the correct number of columns. Found {all_bboxes.shape[1]}, expected 6, 9, 10, or 13.")
 
     # Get image files
     image_folder = dataset_root_path / settings['images_dir']
@@ -128,7 +128,6 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                 cv2.line(frame, (bbox['x3'], bbox['y3']), (bbox['x4'], bbox['y4']), track_colors[track_id], 1, cv2.LINE_AA)
                 cv2.line(frame, (bbox['x4'], bbox['y4']), (bbox['x1'], bbox['y1']), track_colors[track_id], 1, cv2.LINE_AA)
 
-                # TODO: Refine this to show orientation explicitly
                 track_label_x = min(bbox['x1'], bbox['x2'], bbox['x3'], bbox['x4'])
                 track_label_y = min(bbox['y1'], bbox['y2'], bbox['y3'], bbox['y4']) - text_vertical_margin
                 if track_label_y - font_height - text_vertical_margin < 0:
@@ -257,10 +256,18 @@ def _get_bbox_from_yolo_coordinates(x, y, w, h, img_width, img_height):
 def _get_obb_bbox_from_points(x1, y1, x2, y2, x3, y3, x4, y4, img_width, img_height):
     center_x = (x1 + x2 + x3 + x4) / 4
     center_y = (y1 + y2 + y3 + y4) / 4
+
+    # Calculate orientation to align with ultralytics -- see here https://docs.ultralytics.com/datasets/obb/#yolo-obb-format
+
+    orientation_x, orientation_y = get_orientation_arrow_point(x1, y1, x2, y2, x3, y3, x4, y4)
+
+    print(f"center_x: {center_x}, center_y: {center_y}, orientation_x: {orientation_x}, orientation_y: {orientation_y}")
+    print(f"x1: {x1}, y1: {y1}\nx2: {x2}, y2: {y2}\nx3: {x3}, y3: {y3}\nx4: {x4}, y4: {y4}")
+
     bbox = {'x1': x1 * img_width, 'y1': y1 * img_height, 'x2': x2 * img_width, 'y2': y2 * img_height,
             'x3': x3 * img_width, 'y3': y3 * img_height, 'x4': x4 * img_width, 'y4': y4 * img_height,
             'center_x': center_x * img_width, 'center_y': center_y * img_height,
-            'orientation_x': (x2 + x1) / 2 * img_width, 'orientation_y': (y2 + y1) / 2 * img_height}
+            'orientation_x': orientation_x * img_width, 'orientation_y': orientation_y * img_height}
     return {k: int(v) for k, v in bbox.items()}
 
 
