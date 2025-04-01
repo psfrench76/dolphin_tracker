@@ -45,6 +45,13 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         raise ValueError(
             "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
 
+    if all_bboxes.shape[1] == 6:
+        oriented_bbox = False
+    elif all_bboxes.shape[1] == 10:
+        oriented_bbox = True
+    else:
+        raise ValueError(f"Bounding boxes do not have the correct number of columns. Found {all_bboxes.shape[1]}, expected 6 or 10.")
+
     # Get image files
     image_folder = dataset_root_path / settings['images_dir']
     image_files = sorted([f for f in image_folder.iterdir() if f.suffix in settings['image_file_extensions']])
@@ -99,23 +106,49 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
             if np.isnan(row['id']):
                 continue
 
-            # Get bounding box information from row
-            bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width, new_height)
+            if oriented_bbox:
+                # Get oriented bounding box information from row
+                bbox = _get_obb_bbox_from_points(row['x1'], row['y1'], row['x2'], row['y2'], row['x3'], row['y3'], row['x4'], row['y4'], new_width, new_height)
+            else:
+                # Get bounding box information from row
+                bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width, new_height)
+
             track_id = int(row['id'])
 
             # Assign a color to each track ID
             if track_id not in track_colors:
                 track_colors[track_id] = colors[len(track_colors) % len(colors)]
 
-            # Get track label location
-            track_label_x = bbox['x_top_left']
-            track_label_y = bbox['y_top_left'] - text_vertical_margin
-            if track_label_y - font_height - text_vertical_margin < 0:
-                track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
 
-            # Draw bounding box, center point, and track ID
-            cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
-                          (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
+
+            if oriented_bbox:
+                # Draw oriented bounding box
+                cv2.line(frame, (bbox['x1'], bbox['y1']), (bbox['x2'], bbox['y2']), track_colors[track_id], 1, cv2.LINE_AA)
+                cv2.line(frame, (bbox['x2'], bbox['y2']), (bbox['x3'], bbox['y3']), track_colors[track_id], 1, cv2.LINE_AA)
+                cv2.line(frame, (bbox['x3'], bbox['y3']), (bbox['x4'], bbox['y4']), track_colors[track_id], 1, cv2.LINE_AA)
+                cv2.line(frame, (bbox['x4'], bbox['y4']), (bbox['x1'], bbox['y1']), track_colors[track_id], 1, cv2.LINE_AA)
+
+                # TODO: Refine this to show orientation explicitly
+                track_label_x = min(bbox['x1'], bbox['x2'], bbox['x3'], bbox['x4'])
+                track_label_y = min(bbox['y1'], bbox['y2'], bbox['y3'], bbox['y4']) - text_vertical_margin
+                if track_label_y - font_height - text_vertical_margin < 0:
+                    track_label_y = max(bbox['y1'], bbox['y2'], bbox['y3'], bbox['y4']) + text_vertical_margin + font_height
+
+                center_point = (bbox['center_x'], bbox['center_y'])
+                arrow_point = (bbox['orientation_x'], bbox['orientation_y'])
+
+                cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
+            else:
+                # Draw bounding box, center point, and track ID
+                cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
+                              (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
+
+                # Get track label location
+                track_label_x = bbox['x_top_left']
+                track_label_y = bbox['y_top_left'] - text_vertical_margin
+                if track_label_y - font_height - text_vertical_margin < 0:
+                    track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
+
             cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
             cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX,
                         font_scale, track_colors[track_id], 1, cv2.LINE_AA)
@@ -167,7 +200,12 @@ def extract_frames(input_video, dataset_root_path):
 
 def _get_bboxes_from_txt(csv_file):
     bboxes = pd.read_csv(csv_file, header=None)
-    bboxes.columns = settings['bbox_file_columns']
+    if bboxes.shape[1] == len(settings['bbox_file_columns']):
+        bboxes.columns = settings['bbox_file_columns']
+    elif bboxes.shape[1] == len(settings['obb_file_columns']):
+        bboxes.columns = settings['obb_file_columns']
+    else:
+        raise ValueError(f"Bounding box file {csv_file} does not have the correct number of columns. Found {bboxes.shape[1]}, expected {len(settings['bbox_file_columns'])} or {len(settings['obb_file_columns'])}.")
     return bboxes
 
 
@@ -190,7 +228,16 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
 
             bboxes = pd.read_csv(label_file, header=None, sep=' ', index_col=None)
             tracks = pd.read_csv(track_file, header=None, sep=' ', index_col=None)
-            bboxes.columns = settings['bbox_file_columns'][1:6]
+
+
+            if bboxes.shape[1] == 5:
+                bboxes.columns = settings['bbox_file_columns'][1:6]
+            elif bboxes.shape[1] == 9:
+                bboxes.columns = settings['obb_file_columns'][1:10]
+            else:
+                raise ValueError(
+                    f"Bounding box file {label_file} does not have the correct number of columns. Found {bboxes.shape[1]}, expected 5 or 9.")
+
             bboxes.insert(0, 'frame', frame_number)
             bboxes['id'] = tracks
             all_bboxes.append(bboxes)
@@ -207,7 +254,14 @@ def _get_bbox_from_yolo_coordinates(x, y, w, h, img_width, img_height):
         'x_bottom_right': (x + w / 2) * img_width, 'y_bottom_right': (y + h / 2) * img_height}
     return {k: int(v) for k, v in bbox.items()}
 
-
+def _get_obb_bbox_from_points(x1, y1, x2, y2, x3, y3, x4, y4, img_width, img_height):
+    center_x = (x1 + x2 + x3 + x4) / 4
+    center_y = (y1 + y2 + y3 + y4) / 4
+    bbox = {'x1': x1 * img_width, 'y1': y1 * img_height, 'x2': x2 * img_width, 'y2': y2 * img_height,
+            'x3': x3 * img_width, 'y3': y3 * img_height, 'x4': x4 * img_width, 'y4': y4 * img_height,
+            'center_x': center_x * img_width, 'center_y': center_y * img_height,
+            'orientation_x': (x2 + x1) / 2 * img_width, 'orientation_y': (y2 + y1) / 2 * img_height}
+    return {k: int(v) for k, v in bbox.items()}
 
 
 

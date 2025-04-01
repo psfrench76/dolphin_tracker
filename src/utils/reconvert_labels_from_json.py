@@ -45,7 +45,7 @@ def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox
     background_labels_count = 0
     populated_missing_files = []
 
-    for label_file in labels_dir_path.glob('*.txt'):
+    for label_file in sorted(labels_dir_path.glob('*.txt')):
         if label_file.stem in json_paths_index:
             frame_stats = convert_and_save_label(json_paths_index[label_file.stem], dataset_root_path, oriented_bbox)
             converted_count += 1

@@ -38,14 +38,14 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, keypoints, unique_stats = _load_unique_labels(json_file_path, oriented_bbox=oriented_bbox)  # Loads labels and deduplicates them
-    #print(labels)
+    labels, tracks, unique_stats = _load_unique_labels(json_file_path, oriented_bbox=oriented_bbox)  # Loads labels and deduplicates them
+    #print(json_file_path)
     #print(tracks)
     #print(keypoints)
     #print(json_file_path.stem)
-    if oriented_bbox:
-        labels = _convert_labels_to_oriented(labels, keypoints)
+
     trim_stats = _trim_negative_coordinates(labels, oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
+    #print(labels)
     _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
     dedup_stats = _deduplicate_tracks(tracks)  # Deduplicate tracks (different from labels)
 
@@ -165,7 +165,6 @@ def _write_obb_label(labels, label_file_path):
         for label in labels:
             x1, y1, x2, y2, x3, y3, x4, y4 = label
             out_file.write(f"0 {x1} {y1} {x2} {y2} {x3} {y3} {x4} {y4}\n")
-            out_file.write(f"0 {x1} {y1} {x2} {y2} {x3} {y3} {x4} {y4}\n")
 
 
 # Label load, normalization, conversion, and deduplication
@@ -180,19 +179,17 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
     with open(json_file_path, 'r') as file:
         data = json.load(file)
 
-    image_width = data['imageWidth']
-    image_height = data['imageHeight']
 
     for shape in data['shapes']:
         if shape['label'] in settings['head_classes']:
             group_id = shape['group_id'] or 0
-            head_x = shape['points'][0][0] / image_width
-            head_y = shape['points'][0][1] / image_height
+            head_x = shape['points'][0][0]
+            head_y = shape['points'][0][1]
             heads[group_id] = (head_x, head_y)
         elif shape['label'] in settings['tail_classes']:
             group_id = shape['group_id'] or 0
-            tail_x = shape['points'][0][0] / image_width
-            tail_y = shape['points'][0][1] / image_height
+            tail_x = shape['points'][0][0]
+            tail_y = shape['points'][0][1]
             tails[group_id] = (tail_x, tail_y)
         elif shape['label'] in settings['dolphin_classes']:
             # Extract points
@@ -212,10 +209,10 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
             y_max = max(y_coords)
 
             # Normalize coordinates to YOLO format
-            x_center = (x_min + x_max) / 2 / image_width
-            y_center = (y_min + y_max) / 2 / image_height
-            width = (x_max - x_min) / image_width
-            height = (y_max - y_min) / image_height
+            x_center = (x_min + x_max) / 2
+            y_center = (y_min + y_max) / 2
+            width = (x_max - x_min)
+            height = (y_max - y_min)
 
             new_label = (x_center, y_center, width, height)
 
@@ -226,20 +223,27 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
             else:
                 stats['duplicate_labels'] += 1
 
-    # Reprocess to ensure keypoints and labels are aligned
+
+    image_width = data['imageWidth']
+    image_height = data['imageHeight']
+
     if oriented_bbox:
         for i, (label, track) in reversed(list(enumerate(zip(labels, tracks)))):
             if track in heads and track in tails:
                 head_x, head_y = heads[track]
                 tail_x, tail_y = tails[track]
-                keypoints.append((head_x, head_y, tail_x, tail_y))
+                labels[i] = _convert_label_to_oriented(label, (head_x, head_y, tail_x, tail_y))
             else:
                 stats['dolphins_without_keypoints'] += 1
                 stats['unique_labels'] -= 1
+                # TODO: Is there a way to fail more gracefully here when encountering a missing label?
                 labels.pop(i)
                 tracks.pop(i)
+        labels = [(x1 / image_width, y1 / image_height, x2 / image_width, y2 / image_height, x3 / image_width, y3 / image_height, x4 / image_width, y4 / image_height) for x1, y1, x2, y2, x3, y3, x4, y4 in labels]
+    else:
+        labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
 
-    return labels, tracks, keypoints, stats
+    return labels, tracks, stats
 
 
 # Trim negative coordinates to 0 and adjust width or height to maintain the inner edge of the box
@@ -281,75 +285,76 @@ def _trim_negative_coordinates(labels, oriented_bbox=False):
     return stats
 
 
-def _convert_labels_to_oriented(labels, keypoints_list):
-    new_labels = []
-    for i, (label, keypoints) in enumerate(zip(labels, keypoints_list)):
-        x_center, y_center, width, height = label
-        head_x, head_y, tail_x, tail_y = keypoints
+def _convert_label_to_oriented(label, keypoints):
+    x_center, y_center, width, height = label
+    head_x, head_y, tail_x, tail_y = keypoints
+    # print(f"Label: {x_center}, {y_center}, {width}, {height}")
+    # print(f"Head: {head_x}, {head_y}")
+    # print(f"Tail: {tail_x}, {tail_y}")
 
-        # Calculate the angle of the dolphin
-        angle = math.atan2(tail_y - head_y, tail_x - head_x)
+    # Calculate the angle of the dolphin
+    angle = math.atan2(head_y - tail_y, tail_x - head_x)
 
-        # Generate a rectangle containing the full original bounding box
+    # Generate a rectangle containing the full original bounding box
 
-        #TODO - I think Ultralytics does some interpretation of the orientation based on the angle of the box, so
-        # the point order may be inconsistent - won't be able to investigate until I have the full visualization pipeline
+    #TODO - I think Ultralytics does some interpretation of the orientation based on the angle of the box, so
+    # the point order may be inconsistent - won't be able to investigate until I have the full visualization pipeline
 
-        # TODO: Filter angles. exactly 0, 90 degrees should just inherit the original bounding box. Other angles should
-        #   be clamped.
+    #print(f"Index: {i}, Angle: {angle}")
 
-        #print(f"Index: {i}, Angle: {angle}")
+    # Normalize to between 0 and 90 degrees for the sake of rectangle generation
+    while angle < 0:
+        angle += math.pi / 2
 
-        if angle == 0 or angle == math.pi / 2:
-            new_labels.append((x_center - width/2, y_center + height/2,
-                                 x_center + width/2, y_center + height/2,
-                                 x_center + width/2, y_center - height/2,
-                                 x_center - width/2, y_center - height/2))
-            continue
+    while angle > math.pi / 2:
+        angle -= math.pi / 2
 
-        # Normalize to between 0 and 90 degrees for the sake of rectangle generation
-        while angle < 0:
-            angle += math.pi / 2
+    if angle == 0 or angle == math.pi / 2:
+        return x_center - width/2, y_center + height/2, x_center + width/2, y_center + height/2, x_center + width/2, y_center - height/2, x_center - width/2, y_center - height/2
 
-        while angle > math.pi / 2:
-            angle -= math.pi / 2
 
-        #print(f"Index: {i}, Normalized angle: {angle}")
+    # print(f"Normalized angle: {math.degrees(angle)}")
 
-        # Calculate the 4 lines defining the new bounding box, normalized around origin
-        slope1 = math.tan(angle)
-        slope2 = 1 / slope1
-        intercept1 = slope1 * width/2 + height/2
-        intercept2 = math.tan(angle + math.pi / 2) * width/2 - height/2
-        line1 = (-slope1, intercept1)
-        line2 = (slope2, intercept2)
-        line3 = (-slope1, -intercept1)
-        line4 = (slope2, -intercept2)
+    # Calculate the 4 lines defining the new bounding box, normalized around origin
+    # print(width)
+    # print(height)
+    slope1 = math.tan(angle)
+    # print(slope1)
+    slope2 = 1 / slope1
+    # print(slope2)
+    intercept1 = slope1 * width/2 + height/2
+    # print(intercept1)
+    intercept2 = math.tan(angle + math.pi / 2) * width/2 - height/2
+    # print(intercept2)
+    line1 = (-slope1, intercept1)
+    line2 = (slope2, intercept2)
+    line3 = (-slope1, -intercept1)
+    line4 = (slope2, -intercept2)
 
-        #print(f"Index: {i}, Lines: {line1}, {line2}, {line3}, {line4}")
+    #print(f"Index: {i}, Lines: {line1}, {line2}, {line3}, {line4}")
 
-        x1, y1 = _line_intersection(line1, line2)
-        x2, y2 = _line_intersection(line2, line3)
-        x3, y3 = _line_intersection(line3, line4)
-        x4, y4 = _line_intersection(line4, line1)
+    x1, y1 = _line_intersection(line1, line2)
+    x2, y2 = _line_intersection(line2, line3)
+    x3, y3 = _line_intersection(line3, line4)
+    x4, y4 = _line_intersection(line4, line1)
 
-        x1 += x_center
-        y1 += y_center
-        x2 += x_center
-        y2 += y_center
-        x3 += x_center
-        y3 += y_center
-        x4 += x_center
-        y4 += y_center
+    # print(f"Points: {x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {x4}, {y4}")
+    # print(f"Normalized keypoints: {head_x - x_center}, {head_y - y_center}, {tail_x - x_center}, {tail_y - y_center}")
 
-        #print(f"Index: {i}, Points: {x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {x4}, {y4}")
+    x1 += x_center
+    y1 += y_center
+    x2 += x_center
+    y2 += y_center
+    x3 += x_center
+    y3 += y_center
+    x4 += x_center
+    y4 += y_center
 
-        new_labels.append((x1, y1, x2, y2, x3, y3, x4, y4))
 
     #print(labels)
     #print(new_labels)
 
-    return new_labels
+    return x1, y1, x2, y2, x3, y3, x4, y4
 
 # Finds the x and y coordinates of the intersection of two lines, given as slope and intercept.
 def _line_intersection(line1, line2):
