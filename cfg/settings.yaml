@@ -23,6 +23,7 @@ training_log_prefix: 'train' # Prefix for training log files
 training_runs_dir: 'train/stage1' # Subdirectory of detector_runs_dir
 images_dir: 'images' # Subdirectory of all dataset directories
 labels_dir: 'labels' # Subdirectory of all dataset directories
+orientations_dir: 'orientations' # Subdirectory of dataset directories which have orientations
 tracks_dir: 'tracks' # Subdirectory of all dataset directories
 dataset_split_dirs: # Subdirectories of some datasets -- only used for searching and not for saving
   - 'train'
@@ -49,6 +50,7 @@ metrics_events_suffix: 'mot_events.csv'
 researcher_output_suffix: 'output.csv'
 prediction_video_suffix: 'predictions.mp4'
 gt_video_suffix: 'gt.mp4'
+images_index_suffix: 'images_index.txt'
 
 # Default tracking configuration files
 ultralytics_bytetrack: 'cfg/trackers/bytetrack_default.yaml' # Relative to project root

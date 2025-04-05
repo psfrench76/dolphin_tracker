@@ -10,6 +10,8 @@ import json
 import math
 
 
+# TODO: Dataset conversion functionality to create annotations
+
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
 # to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
 # dataset directory. It also saves the track IDs to the tracks directory in the dataset directory.

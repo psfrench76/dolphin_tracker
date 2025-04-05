@@ -21,6 +21,8 @@ else:
     from .utils.inc.tracking_metrics import TrackingMetrics
     from .utils.inc.oriented_bounding_boxes import rotate_points
 
+# TODO: update codebase to use images_index_file and not assume frame numbers are unique
+#  (may impact evaluation on composite datasets)
 
 @click.command()
 @click.option('--dataset', required=True, help="Path to the dataset directory.")
@@ -76,6 +78,7 @@ class DolphinTracker:
         self.metrics_file_path = self.output_dir_path / f'{self.run_name}_{settings["metrics_file_suffix"]}'
         self.metrics_events_path = self.output_dir_path / f'{self.run_name}_{settings["metrics_events_suffix"]}'
         self.researcher_output_path = self.output_dir_path / f'{self.run_name}_{settings["researcher_output_suffix"]}'
+        self.images_index_file_path = self.output_dir_path / f'{self.run_name}_{settings["images_index_suffix"]}'
 
         with open(self.tracker_path, 'r') as file:
             tracker_settings = yaml.safe_load(file)
@@ -115,6 +118,7 @@ class DolphinTracker:
 
         data = []
         researcher_data = []
+        image_files_index = []
 
         for i, result in enumerate(results):
             match = re.search(pattern, str(files[i]))
@@ -151,6 +155,7 @@ class DolphinTracker:
                     data.append(
                         [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
                          y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
+                    image_files_index.append(str(files[i]))
                     researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
             else:
                 for box in result.boxes:
@@ -164,6 +169,7 @@ class DolphinTracker:
                         center_x = (point_a_x + point_b_x) / 2
                         center_y = (point_a_y + point_b_y) / 2
                         data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
+                        image_files_index.append(str(files[i]))
 
                         point_a_x_px = point_a_x * img_width
                         point_a_y_px = point_a_y * img_height
@@ -195,6 +201,9 @@ class DolphinTracker:
         df = pd.DataFrame(data, columns=df_columns)
         df.to_csv(self.results_file_path, index=False, header=False)
         print(f"Wrote raw results to {self.results_file_path}")
+
+        images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
+        images_df.to_csv(self.images_index_file_path, index=False, header=False)
 
         if researcher_data:
             if camera_df is not None:
