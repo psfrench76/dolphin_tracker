@@ -5,9 +5,6 @@ from PIL import Image
 from pathlib import Path
 from .settings import settings
 
-# TODO: annotations should be either input from previous network, or loaded from dataset from __init__
-
-
 class DolphinOrientationDataset(Dataset):
 
     """
@@ -90,9 +87,9 @@ class DolphinOrientationDataset(Dataset):
                 y_bottom_right = y_center + height / 2
 
                 bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
-                orientation = float(line)
+                orientation_x, orientation_y = map(float, orientation.split())
 
-                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation})
+                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': [orientation_x, orientation_y]})
 
         return annotations
 
@@ -111,7 +108,7 @@ class DolphinOrientationDataset(Dataset):
 
                     image_path = self.dataset_root_path / settings['images_dir'] / image_file_name.strip()
                     bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
-                    orientation = None
+                    orientation = [None, None]
 
                     annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation})
 

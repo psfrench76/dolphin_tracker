@@ -10,7 +10,7 @@ import json
 import math
 
 
-# TODO: Dataset conversion functionality to create annotations
+# TODO: Dataset conversion functionality to create annotations (stored as x and y values)
 
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
 # to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
@@ -18,12 +18,13 @@ import math
 
 # json_file_path: The path to the JSON file to be converted
 # dataset_dir_path: The path to the directory where the labels and tracks directories are located (the dataset root)
-# oriented_bbox: A boolean flag indicating whether the labels should be converted to oriented bounding box format.
+# oriented_bbox: A boolean flag indicating whether the labels should be converted to oriented bounding box format. (incomplete)
+# xy_orientation: A boolean flag indicating whether the labels should be converted to XY orientation format. This is the method in use for dolphin orientations.
 
 # Returns a dictionary of statistics about the conversion process, which can be used by calling scripts, aggregated, and
 # then passed again to the print_run_stats function to print a summary. See src/utils/copy_and_convert_all_labels.py for
 # a usage example.
-def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False):
+def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False, xy_orientation=False):
     frame_stats = {'unique_labels': 0,  # Total unique labels (not frames, some frames have 0 or 2+ labels)
                    'duplicate_labels': 0,  # Total duplicate labels (bounding boxes are identical)
                    'negative_coordinates_trimmed': 0,  # Total labels with negative coordinates trimmed
@@ -40,8 +41,8 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, unique_stats = _load_unique_labels(json_file_path,
-                                                       oriented_bbox=oriented_bbox)  # Loads labels and deduplicates
+    labels, tracks, orientations, unique_stats = _load_unique_labels(json_file_path,
+                                                        oriented_bbox=oriented_bbox)  # Loads labels and deduplicates
     trim_stats = _trim_negative_coordinates(labels,
                                             oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
     _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
@@ -55,6 +56,10 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
         _write_obb_label(labels, label_file_path)
     else:
         _write_label(labels, label_file_path)
+        if xy_orientation:
+            orientation_dir_path = dataset_dir_path / settings['orientations_dir']
+            orientation_file_path = orientation_dir_path / f"{json_file_path.stem}.txt"
+            _write_orientation(orientations, orientation_file_path)
 
     _write_track(tracks, track_file_path)
 
@@ -164,14 +169,18 @@ def _write_obb_label(labels, label_file_path):
             x1, y1, x2, y2, x3, y3, x4, y4 = label
             out_file.write(f"0 {x1} {y1} {x2} {y2} {x3} {y3} {x4} {y4}\n")
 
+def _write_orientation(orientations, orientation_file_path):
+    with open(orientation_file_path, 'w') as orientation_file:
+        for orientation in orientations:
+            orientation_file.write(f"{orientation[0]} {orientation[1]}\n")
 
 # Label load, normalization, conversion, and deduplication
-def _load_unique_labels(json_file_path, oriented_bbox=False):
+def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=False):
     labels = []
     tracks = []
     heads = {}
     tails = {}
-    keypoints = []
+    orientations = []
     stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0}
 
     with open(json_file_path, 'r') as file:
@@ -232,15 +241,30 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
             else:
                 stats['dolphins_without_keypoints'] += 1
                 stats['unique_labels'] -= 1
-                # TODO: Is there a way to fail more gracefully here when encountering a missing label?
                 labels.pop(i)
                 tracks.pop(i)
         labels = [(x1 / image_width, y1 / image_height, x2 / image_width, y2 / image_height, x3 / image_width,
                    y3 / image_height, x4 / image_width, y4 / image_height) for x1, y1, x2, y2, x3, y3, x4, y4 in labels]
+    elif xy_orientation:
+        for i, (label, track) in reversed(list(enumerate(zip(labels, tracks)))):
+            if track in heads and track in tails:
+                head_x, head_y = heads[track]
+                tail_x, tail_y = tails[track]
+
+                orientation_x = head_x - tail_x
+                orientation_y = tail_y - head_y # (Y is reversed in this coordinate system)
+
+                orientations.append((orientation_x, orientation_y))
+            else:
+                stats['dolphins_without_keypoints'] += 1
+                stats['unique_labels'] -= 1
+                labels.pop(i)
+                tracks.pop(i)
+        labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
     else:
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
 
-    return labels, tracks, stats
+    return labels, tracks, orientations, stats
 
 
 # Trim negative coordinates to 0 and adjust width or height to maintain the inner edge of the box
