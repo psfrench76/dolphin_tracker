@@ -82,9 +82,9 @@ head_classes:
   - Head
 
 tail_classes:
-    - Tail
+  - Tail
 
-# Tracking output file settings
+# YOLO output file columns
 bbox_file_columns:
     - 'frame'
     - 'id'

@@ -26,7 +26,7 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
                    'duplicate_labels': 0,  # Total duplicate labels (bounding boxes are identical)
                    'negative_coordinates_trimmed': 0,  # Total labels with negative coordinates trimmed
                    'duplicate_tracks_renumbered': 0,  # Total duplicate tracks renumbered
-                   'dolphins_without_keypoints': 0 # Total dolphins without keypoints
+                   'dolphins_without_keypoints': 0  # Total dolphins without keypoints
                    }
     dataset_dir_path = Path(dataset_dir_path)
     label_dir_path = dataset_dir_path / settings['labels_dir']
@@ -38,14 +38,10 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, unique_stats = _load_unique_labels(json_file_path, oriented_bbox=oriented_bbox)  # Loads labels and deduplicates them
-    #print(json_file_path)
-    #print(tracks)
-    #print(keypoints)
-    #print(json_file_path.stem)
-
-    trim_stats = _trim_negative_coordinates(labels, oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
-    #print(labels)
+    labels, tracks, unique_stats = _load_unique_labels(json_file_path,
+                                                       oriented_bbox=oriented_bbox)  # Loads labels and deduplicates
+    trim_stats = _trim_negative_coordinates(labels,
+                                            oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
     _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
     dedup_stats = _deduplicate_tracks(tracks)  # Deduplicate tracks (different from labels)
 
@@ -179,7 +175,6 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
     with open(json_file_path, 'r') as file:
         data = json.load(file)
 
-
     for shape in data['shapes']:
         if shape['label'] in settings['head_classes']:
             group_id = shape['group_id'] or 0
@@ -223,7 +218,6 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
             else:
                 stats['duplicate_labels'] += 1
 
-
     image_width = data['imageWidth']
     image_height = data['imageHeight']
 
@@ -239,7 +233,8 @@ def _load_unique_labels(json_file_path, oriented_bbox=False):
                 # TODO: Is there a way to fail more gracefully here when encountering a missing label?
                 labels.pop(i)
                 tracks.pop(i)
-        labels = [(x1 / image_width, y1 / image_height, x2 / image_width, y2 / image_height, x3 / image_width, y3 / image_height, x4 / image_width, y4 / image_height) for x1, y1, x2, y2, x3, y3, x4, y4 in labels]
+        labels = [(x1 / image_width, y1 / image_height, x2 / image_width, y2 / image_height, x3 / image_width,
+                   y3 / image_height, x4 / image_width, y4 / image_height) for x1, y1, x2, y2, x3, y3, x4, y4 in labels]
     else:
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
 
@@ -259,13 +254,13 @@ def _trim_negative_coordinates(labels, oriented_bbox=False):
         else:
             x_center, y_center, width, height = label
 
-            # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in the
-            # frame should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the width or
-            # height by 2 * the negative coordinate -- this pulls the negative edge of the box slightly closer while
-            # maintaining the center as close as possible to the original center.
+            # The assumption here is that if an x or y center coordinate is negative, the end of the box which is in
+            # the frame should stay stationary. This is done by setting the x or y coordinate to 0 and adjusting the
+            # width or height by 2 * the negative coordinate -- this pulls the negative edge of the box slightly
+            # closer while maintaining the center as close as possible to the original center.
 
-            # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an edge
-            # case
+            # Negative coordinates really shouldn't be a thing -- this is a workaround for labelling error and is an
+            # edge case
 
             if x_center < 0 or y_center < 0:
                 stats['negative_coordinates_trimmed'] += 1
@@ -286,21 +281,20 @@ def _trim_negative_coordinates(labels, oriented_bbox=False):
 
 
 def _convert_label_to_oriented(label, keypoints):
+    """
+    WARNING: This feature is incomplete. See longer note in src/track.py. This is intended to convert the data from the
+    original XY-plane bounding box format to the oriented bounding box format. The rectangle chosen is defined as the
+    smallest rectangle containing all four original corner points, with two sides parallel to the head-to-tail angle.
+
+    The rectangle is defined accurately, but the orientation is ambiguous. I abandoned this feature because the YOLO
+    internal format only recognizes angles between [0, 180) degrees, and so even after unpacking the angle it is
+    ambiguous. However, I am leaving it here for posterity.
+    """
     x_center, y_center, width, height = label
     head_x, head_y, tail_x, tail_y = keypoints
-    # print(f"Label: {x_center}, {y_center}, {width}, {height}")
-    # print(f"Head: {head_x}, {head_y}")
-    # print(f"Tail: {tail_x}, {tail_y}")
 
     # Calculate the angle of the dolphin
     angle = math.atan2(head_y - tail_y, tail_x - head_x)
-
-    # Generate a rectangle containing the full original bounding box
-
-    #TODO - I think Ultralytics does some interpretation of the orientation based on the angle of the box, so
-    # the point order may be inconsistent - won't be able to investigate until I have the full visualization pipeline
-
-    #print(f"Index: {i}, Angle: {angle}")
 
     # Normalize to between 0 and 90 degrees for the sake of rectangle generation
     while angle < 0:
@@ -310,36 +304,24 @@ def _convert_label_to_oriented(label, keypoints):
         angle -= math.pi / 2
 
     if angle == 0 or angle == math.pi / 2:
-        return x_center - width/2, y_center + height/2, x_center + width/2, y_center + height/2, x_center + width/2, y_center - height/2, x_center - width/2, y_center - height/2
-
-
-    # print(f"Normalized angle: {math.degrees(angle)}")
+        return (
+        x_center - width / 2, y_center + height / 2, x_center + width / 2, y_center + height / 2, x_center + width / 2,
+        y_center - height / 2, x_center - width / 2, y_center - height / 2)
 
     # Calculate the 4 lines defining the new bounding box, normalized around origin
-    # print(width)
-    # print(height)
     slope1 = math.tan(angle)
-    # print(slope1)
     slope2 = 1 / slope1
-    # print(slope2)
-    intercept1 = slope1 * width/2 + height/2
-    # print(intercept1)
-    intercept2 = math.tan(angle + math.pi / 2) * width/2 - height/2
-    # print(intercept2)
+    intercept1 = slope1 * width / 2 + height / 2
+    intercept2 = math.tan(angle + math.pi / 2) * width / 2 - height / 2
     line1 = (-slope1, intercept1)
     line2 = (slope2, intercept2)
     line3 = (-slope1, -intercept1)
     line4 = (slope2, -intercept2)
 
-    #print(f"Index: {i}, Lines: {line1}, {line2}, {line3}, {line4}")
-
     x1, y1 = _line_intersection(line1, line2)
     x2, y2 = _line_intersection(line2, line3)
     x3, y3 = _line_intersection(line3, line4)
     x4, y4 = _line_intersection(line4, line1)
-
-    # print(f"Points: {x1}, {y1}, {x2}, {y2}, {x3}, {y3}, {x4}, {y4}")
-    # print(f"Normalized keypoints: {head_x - x_center}, {head_y - y_center}, {tail_x - x_center}, {tail_y - y_center}")
 
     x1 += x_center
     y1 += y_center
@@ -350,11 +332,8 @@ def _convert_label_to_oriented(label, keypoints):
     x4 += x_center
     y4 += y_center
 
-
-    #print(labels)
-    #print(new_labels)
-
     return x1, y1, x2, y2, x3, y3, x4, y4
+
 
 # Finds the x and y coordinates of the intersection of two lines, given as slope and intercept.
 def _line_intersection(line1, line2):
@@ -363,6 +342,7 @@ def _line_intersection(line1, line2):
     x = (intercept2 - intercept1) / (slope1 - slope2)
     y = slope1 * x + intercept1
     return x, y
+
 
 # Increments a tracks array by a specified amount
 def _increment_all_tracks(tracks, amount=1):

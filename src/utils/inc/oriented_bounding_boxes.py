@@ -1,6 +1,9 @@
 import math
 
-from numpy.ma.core import argmin
+"""
+This module contains helper functions to work with YOLO-OBB (Oriented Bounding Boxes) format. These features are
+incomplete, but included here for posterity. See longer notes in src/utils/inc/data_conversion.py and src/track.py.
+"""
 
 
 def get_orientation_angle_radians(x1, y1, x2, y2, x3, y3, x4, y4):
@@ -12,27 +15,19 @@ def get_orientation_angle_radians(x1, y1, x2, y2, x3, y3, x4, y4):
     angle = math.atan2(orientation_y - center_y, center_x - orientation_x)
     return angle
 
+
 def get_orientation_arrow_point(x1, y1, x2, y2, x3, y3, x4, y4):
     orientation_x = (x2 + x3) / 2
     orientation_y = (y2 + y3) / 2
     return orientation_x, orientation_y
 
+
 def rotate_points(x1, y1, x2, y2, x3, y3, x4, y4, angle):
-    # if rotation > math.pi / 2:
-    #     x4, y4, x1, y1, x2, y2, x3, y3 = torch.flatten(xyxyxyxyn).tolist()
-    # else:
-
-    # # Mirroring calculation here https://docs.ultralytics.com/datasets/obb/#yolo-obb-format
-    # l1 = x1 - x4
-    # l2 = y4 - y1
-
-    # if l1 > l2:
-    #     x4, y4, x1, y1, x2, y2, x3, y3 = torch.flatten(xyxyxyxyn).tolist()
-
     points = [(x1, y1), (x2, y2), (x3, y3), (x4, y4)]
     point_with_min_x = min(points, key=lambda point: point[0])
     point_with_min_y = min(points, key=lambda point: point[1])
 
+    # Mirroring calculation here https://docs.ultralytics.com/datasets/obb/#yolo-obb-format
     l1 = point_with_min_y[0] - point_with_min_x[0]
     l2 = point_with_min_x[1] - point_with_min_y[1]
 
