@@ -139,6 +139,13 @@ def create_background_tracks_file(label_file_path):
     track_file_path.touch()
 
 
+def create_background_orientations_file(label_file_path):
+    label_file_path = Path(label_file_path)
+    orientation_dir_path = label_file_path.parent.parent / settings['orientations_dir']
+    orientation_dir_path.mkdir(exist_ok=True)
+    orientation_file_path = orientation_dir_path / f"{label_file_path.stem}.txt"
+    orientation_file_path.touch()
+
 # Below this line are private functions which are not intended to be used outside of this module.
 
 # IO functions

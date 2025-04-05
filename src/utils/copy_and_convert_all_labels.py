@@ -13,7 +13,7 @@ from inc.settings import settings
 
 # Copies and converts all labels present in the source directory (a directory containing json files) to the
 # destination dataset, in a labels subdirectory, in yolo format.
-def copy_and_convert_all_labels(json_source_dir, dataset_root_dr, oriented_bbox=False):
+def copy_and_convert_all_labels(json_source_dir, dataset_root_dr, oriented_bbox=False, xy_orientations=False):
     json_source_path = Path(json_source_dir)
     dataset_root_path = Path(dataset_root_dr)
     run_stats = {}
@@ -25,7 +25,7 @@ def copy_and_convert_all_labels(json_source_dir, dataset_root_dr, oriented_bbox=
     converted_count = 0
 
     for json_file in json_source_path.glob('*.json'):
-        frame_stats = convert_and_save_label(json_file, dataset_root_path, oriented_bbox)
+        frame_stats = convert_and_save_label(json_file, dataset_root_path, oriented_bbox, xy_orientations)
         converted_count += 1
         for key, value in frame_stats.items():
             if key not in run_stats:
@@ -42,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument('json_source_dir', type=str, help='Path to the source directory')
     parser.add_argument('dataset_root_dr', type=str, help='Path to the dataset root directory')
     parser.add_argument('--oriented_bbox', action='store_true', help='Convert to oriented bounding box format')
+    parser.add_argument('--xy_orientations', action='store_true', help='Convert to xy orientations format')
     args = parser.parse_args()
 
-    copy_and_convert_all_labels(args.json_source_dir, args.dataset_root_dr, args.oriented_bbox)
+    copy_and_convert_all_labels(args.json_source_dir, args.dataset_root_dr, args.oriented_bbox, args.xy_orientations)

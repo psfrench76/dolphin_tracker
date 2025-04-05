@@ -4,12 +4,12 @@ It indexes the full contents of the source directory and subdirectories at the s
 It reports any files which are present in the destination but not in the source, and notes whether they are empty
 labels (good) or populated (bad).
 
-Usage: reconvert_labels_from_json.py <json_source_dir> <dataset_root_dir> [--oriented_bbox]
+Usage: reconvert_labels_from_json.py <json_source_dir> <dataset_root_dir> [--oriented_bbox] [--xy_orientations]
 """
 
 import argparse
 from pathlib import Path
-from inc.data_conversion import convert_and_save_label, print_run_stats, create_background_tracks_file
+from inc.data_conversion import convert_and_save_label, print_run_stats, create_background_tracks_file, create_background_orientations_file
 from inc.settings import settings
 
 
@@ -29,14 +29,14 @@ def _index_files(directory):
 # For every label file which is present in dataset_root_dir / settings['labels_dir'], it checks if the corresponding
 # json file is present in json index, and reconverts from json to yolo format. Useful when the conversion protocol
 # has changed, or a non-oriented dataset needs to be converted to oriented, etc.
-def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox=False):
+def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox=False, xy_orientations=False):
     json_source_path = Path(json_source_dir)
     dataset_root_path = Path(dataset_root_dir)
     run_stats = {}
 
     # Sanity check for destination directory
-    if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
-        raise ValueError("Destination directory should be the dataset root, not images, labels, or tracks directory.")
+    if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir'], settings['orientations_dir']]:
+        raise ValueError("Destination directory should be the dataset root, not images, labels, tracks, or orientations directory.")
 
     json_paths_index = _index_files(json_source_path)
     labels_dir_path = dataset_root_path / settings['labels_dir']
@@ -47,7 +47,7 @@ def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox
 
     for label_file in sorted(labels_dir_path.glob('*.txt')):
         if label_file.stem in json_paths_index:
-            frame_stats = convert_and_save_label(json_paths_index[label_file.stem], dataset_root_path, oriented_bbox)
+            frame_stats = convert_and_save_label(json_paths_index[label_file.stem], dataset_root_path, oriented_bbox, xy_orientations)
             converted_count += 1
             for key, value in frame_stats.items():
                 if key not in run_stats:
@@ -58,6 +58,8 @@ def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox
             if label_file.stat().st_size == 0:
                 background_labels_count += 1
                 create_background_tracks_file(label_file)  # Create a background tracks file for empty labels
+                if xy_orientations:
+                    create_background_orientations_file(label_file)  # Create a background orientations file for empty labels
             else:
                 populated_missing_files.append(label_file.name)
 
@@ -76,6 +78,7 @@ if __name__ == "__main__":
     parser.add_argument('json_source_dir', type=str, help='Path to the source directory')
     parser.add_argument('dataset_root_dir', type=str, help='Path to the dataset root directory')
     parser.add_argument('--oriented_bbox', action='store_true', help='Convert to oriented bounding box format')
+    parser.add_argument('--xy_orientations', action='store_true', help='Use XY orientations and store in separate folder')
     args = parser.parse_args()
 
-    _reconvert_labels_from_json(args.json_source_dir, args.dataset_root_dir, args.oriented_bbox)
+    _reconvert_labels_from_json(args.json_source_dir, args.dataset_root_dir, args.oriented_bbox, args.xy_orientations)
