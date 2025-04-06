@@ -4,6 +4,8 @@ from torchvision import transforms
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
 from utils.inc.settings import set_seed
+from tqdm import tqdm
+import pandas as pd
 
 def train(model, dataloader, criterion, optimizer, device):
     model.train()
@@ -53,17 +55,31 @@ def main():
     model.eval()
     all_outputs = []
     all_indices = []
+    all_tracks = []
+    outfile_path = "final_outputs.txt"
+
+    print(f"Model loaded. Predicting on {len(dataset)} images.")
     with torch.no_grad():
-        for images, _, idxs in dataloader:
+        for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting", unit="batch"):
             images = images.to(device)
             outputs = model(images)
             all_outputs.append(outputs)
             all_indices.append(idxs)
-    all_outputs = torch.cat(all_outputs, dim=0)
-    all_indices = torch.cat(all_indices, dim=0)
-    model.write_outputs(all_outputs, all_indices, "final_outputs.txt")
-    model.save_angles(all_outputs, "final_angles.txt")
-    print("Final angles saved to final_angles.txt")
+            all_tracks.append(tracks)
+
+    all_outputs = torch.cat(all_outputs, dim=0).cpu()
+    all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
+    all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
+    all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
+
+    print(f"Predictions complete. Saving to {outfile_path}")
+
+    # Create a DataFrame
+    data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
+    other_df = pd.DataFrame(data)
+
+    model.write_outputs(all_outputs, other_df, outfile_path)
+    print(f"Final angles saved to {outfile_path}")
 
 if __name__ == "__main__":
     main()
