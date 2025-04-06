@@ -18,6 +18,7 @@ from .settings import settings
 from .oriented_bounding_boxes import get_orientation_arrow_point
 
 
+
 # Args:
 # dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory
 # with individual frames, and optionally a labels directory with ground truth labels in YOLO format. If no bbox_path
@@ -28,7 +29,8 @@ from .oriented_bounding_boxes import get_orientation_arrow_point
 # bbox_path (Path): Path to the bounding box prediction file (MOT15 format). If provided, the function will use this
 # file to generate the video. If not provided, the function will look for labels and tracks in the dataset root
 # directory.
-def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None):
+# orientations_outfile (Path): Path to the orientations output file (optional). This is an output file from the orientations neural network.
+def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None):
     if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
@@ -41,19 +43,20 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
     elif bbox_path.suffix == '.txt':
         all_bboxes = _get_bboxes_from_txt(bbox_path)
+        all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes)
         output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
     else:
         raise ValueError(
             "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
 
-    if all_bboxes.shape[1] == 6 or all_bboxes.shape[1] == 9:
-        oriented_bbox = False
-    elif all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
+    # Check if all_bboxes has angle column
+
+
+    if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
         oriented_bbox = True
     else:
-        raise ValueError(
-            f"Bounding boxes do not have the correct number of columns. Found {all_bboxes.shape[1]}, expected 6, 9, "
-            f"10, or 13.")
+        oriented_bbox = False
+
 
     # Get image files
     image_folder = dataset_root_path / settings['images_dir']
@@ -89,7 +92,7 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     text_vertical_margin = 5
 
     # Iterate over each frame
-    for image_file in tqdm(image_files, desc="Processing frames"):
+    for image_file in tqdm(image_files, desc="Processing frames", unit="frame"):
         match = re.search(settings['frame_number_regex'], image_file.name)
         if match:
             frame_number = int(match.group(1))
@@ -101,11 +104,12 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         frame = cv2.imread(str(image_file))
         frame = cv2.resize(frame, (new_width, new_height))
 
+        # TODO: Technically frame numbers are not guaranteed to be unique. Could use images_index or some other mapping
         # Filter bounding boxes for the current frame
         frame_bboxes = all_bboxes[all_bboxes['frame'] == frame_number]
 
         # Draw bounding boxes and labels
-        for _, row in frame_bboxes.iterrows():
+        for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
             if np.isnan(row['id']):
                 continue
 
@@ -144,10 +148,6 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                     track_label_y = max(bbox['y1'], bbox['y2'], bbox['y3'],
                                         bbox['y4']) + text_vertical_margin + font_height
 
-                center_point = (bbox['center_x'], bbox['center_y'])
-                arrow_point = (bbox['orientation_x'], bbox['orientation_y'])
-
-                cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
             else:
                 # Draw bounding box, center point, and track ID
                 cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
@@ -158,6 +158,16 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                 track_label_y = bbox['y_top_left'] - text_vertical_margin
                 if track_label_y - font_height - text_vertical_margin < 0:
                     track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
+
+            if oriented_bbox or 'angle' in row:
+                center_point = (bbox['center_x'], bbox['center_y'])
+                if 'orientation_x' in bbox and 'orientation_y' in bbox:
+                    arrow_point = (bbox['orientation_x'], bbox['orientation_y'])
+                else:
+                    arrow_point = _get_orientation_point(row['angle'], bbox)
+                if arrow_point is not None:
+                    cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
+
 
             cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
             cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX, font_scale,
@@ -220,9 +230,18 @@ def _get_bboxes_from_txt(csv_file):
 def _get_bboxes_from_dataset_root(dataset_root_path):
     labels_dir = dataset_root_path / settings['labels_dir']
     tracks_dir = dataset_root_path / settings['tracks_dir']
+    orientations_dir = dataset_root_path / settings['orientations_dir']
+    get_orientations = False
+    orientations_index = {}
+    if orientations_dir.is_dir():
+        get_orientations = True
+        orientations_files = orientations_dir.iterdir()
+        for orientations_file in orientations_files:
+            orientations_index[orientations_file.stem] = orientations_file
+
     all_bboxes = []
 
-    for label_file in labels_dir.iterdir():
+    for label_file in sorted(labels_dir.iterdir()):
         track_file = tracks_dir / label_file.name
         match = re.search(settings['frame_number_regex'], label_file.name)
         if match:
@@ -230,24 +249,33 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
         else:
             raise ValueError(f"Could not parse frame number from file: {label_file}")
 
-        if track_file.exists():
-            if label_file.stat().st_size == 0:
-                continue
+        if label_file.stat().st_size == 0:
+            continue
 
+        if track_file.exists():
             bboxes = pd.read_csv(label_file, header=None, sep=' ', index_col=None)
             tracks = pd.read_csv(track_file, header=None, sep=' ', index_col=None)
 
-            if bboxes.shape[1] == 5:
-                bboxes.columns = settings['bbox_file_columns'][1:6]
-            elif bboxes.shape[1] == 9:
+            if bboxes.shape[1] == 9:
                 bboxes.columns = settings['obb_file_columns'][1:10]
             else:
-                raise ValueError(
-                    f"Bounding box file {label_file} does not have the correct number of columns. Found "
-                    f"{bboxes.shape[1]}, expected 5 or 9.")
+                bboxes.columns = settings['bbox_file_columns'][1:6]
 
+            bboxes = bboxes.reset_index().rename(columns={'index': 'label_index'})
             bboxes.insert(0, 'frame', frame_number)
             bboxes['id'] = tracks
+
+            if get_orientations:
+                if label_file.stem not in orientations_index:
+                    raise FileNotFoundError(f"Orientation file for {label_file.stem} not found.")
+
+                orientations_file = orientations_index[label_file.stem]
+                orientations = pd.read_csv(orientations_file, header=None, sep=' ', index_col=None)
+                orientations.columns = settings['orientation_file_columns']
+                orientations['angle'] = np.arctan2(orientations['y'], orientations['x'])
+                orientations['angle'] = np.rad2deg(orientations['angle'])
+                bboxes = bboxes.merge(orientations[['label_index', 'angle']], on='label_index', how='left')
+
             all_bboxes.append(bboxes)
         else:
             raise ValueError(f"Label file {label_file} found without corresponding track file {track_file}")
@@ -277,3 +305,26 @@ def _get_obb_bbox_from_points(x1, y1, x2, y2, x3, y3, x4, y4, img_width, img_hei
             'center_x': center_x * img_width, 'center_y': center_y * img_height,
             'orientation_x': orientation_x * img_width, 'orientation_y': orientation_y * img_height}
     return {k: int(v) for k, v in bbox.items()}
+
+# TODO: This should be implemented to read the orientations from the txt file and merge them with the bounding boxes
+#  dataframe. See _get_bboxes_from_dataset_root for the method.
+def _get_orientations_from_txt_and_merge(orientations_file, bboxes):
+    if orientations_file is None:
+        return bboxes
+    raise NotImplementedError("Orientation extraction from txt files is not implemented yet.")
+
+
+# Assume orientation is in degrees, between -180 and 180
+def _get_orientation_point(orientation, bbox):
+    if orientation is None or np.isnan(orientation):
+        return None
+
+    # Convert orientation to radians
+    orientation_rad = np.deg2rad(orientation)
+
+    # Calculate the arrow point as a point on the bounding box
+    arrow_length = 0.5 * np.sqrt(bbox['w'] ** 2 + bbox['h'] ** 2)  # Length of the arrow
+    arrow_x = int(bbox['center_x'] + arrow_length * np.cos(orientation_rad))
+    arrow_y = int(bbox['center_y'] - arrow_length * np.sin(orientation_rad))
+
+    return arrow_x, arrow_y

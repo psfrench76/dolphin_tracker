@@ -86,7 +86,7 @@ head_classes:
 tail_classes:
   - Tail
 
-# YOLO output file columns
+# File columns
 bbox_file_columns:
     - 'frame'
     - 'id'
@@ -112,6 +112,11 @@ obb_file_columns:
     - 'score'
     - 'class'
     - 'visibility'
+
+orientation_file_columns:
+    - 'label_index'
+    - 'x'
+    - 'y'
 
 # Image file settings
 image_file_extensions: # Note that currently jpg is the only fully supported format, but this is for future expansion
