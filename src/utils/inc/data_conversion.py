@@ -9,7 +9,7 @@ from pathlib import Path
 import json
 import math
 
-
+#   TODO: any time tracks are changed (including during regeneration) we should update the orientations as well.
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
 # to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
 # dataset directory. It also saves the track IDs to the tracks directory in the dataset directory.
@@ -27,7 +27,8 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
                    'duplicate_labels': 0,  # Total duplicate labels (bounding boxes are identical)
                    'negative_coordinates_trimmed': 0,  # Total labels with negative coordinates trimmed
                    'duplicate_tracks_renumbered': 0,  # Total duplicate tracks renumbered
-                   'dolphins_without_keypoints': 0  # Total dolphins without keypoints
+                   'dolphins_without_keypoints': 0,  # Total dolphins without keypoints
+                   'unrecognized_shape_labels': 0,  # Total shapes with unrecognized labels
                    }
     dataset_dir_path = Path(dataset_dir_path)
     label_dir_path = dataset_dir_path / settings['labels_dir']
@@ -74,6 +75,7 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
 def print_run_stats(run_stats):
     total_duplicate_tracks = 0
     total_unique_labels = 0
+    total_invalid_keypoints = 0
     total_frames = 0
     for key, value in run_stats.items():
         if key == 'unique_labels':
@@ -103,8 +105,16 @@ def print_run_stats(run_stats):
                         print(f"  {k}: {v}")
         elif key == 'dolphins_without_keypoints':
             if sum(value.values()) > 0:
+                total_invalid_keypoints = sum(value.values())
                 print(f"Total dolphins without keypoints: {sum(value.values())}")
                 print(f"Dolphins without keypoints by frame:")
+                for k, v in sorted(value.items()):
+                    if v > 0:
+                        print(f"  {k}: {v}")
+        elif key == 'unrecognized_shape_labels':
+            if sum(value.values()) > 0:
+                print(f"Total unrecognized shape labels: {sum(value.values())}")
+                print(f"Unrecognized shape labels by frame:")
                 for k, v in sorted(value.items()):
                     if v > 0:
                         print(f"  {k}: {v}")
@@ -112,8 +122,10 @@ def print_run_stats(run_stats):
     # ignore frames which only have one label -- they can't have duplicate tracks
     labels_excluding_firsts = total_unique_labels - total_frames
     duplicate_track_ratio = total_duplicate_tracks / labels_excluding_firsts if labels_excluding_firsts != 0 else 0
+    invalid_keypoints_ratio = total_invalid_keypoints / total_unique_labels if total_unique_labels != 0 else 0
     print(f"Total frames: {total_frames}")
     print(f"Total unique labels: {total_unique_labels}")
+    print(f"Proportion of labels without valid keypoints: {invalid_keypoints_ratio:.2%}")
     print(f"Proportion of duplicate tracks: {duplicate_track_ratio:.2%}")
     if duplicate_track_ratio > .15:  # This is an arbitrary threshold -- it's a warning, not an error
         print("WARNING: High proportion of duplicate tracks detected. This may indicate a problem with the labeling. "
@@ -180,7 +192,7 @@ def _write_obb_label(labels, label_file_path):
 def _write_orientation(orientations, orientation_file_path):
     with open(orientation_file_path, 'w') as orientation_file:
         for orientation in orientations:
-            orientation_file.write(f"{orientation[0]} {orientation[1]}\n")
+            orientation_file.write(f"{orientation[0]} {orientation[1]} {orientation[2]}\n")
 
 # Label load, normalization, conversion, and deduplication
 def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=False):
@@ -189,7 +201,7 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
     heads = {}
     tails = {}
     orientations = []
-    stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0}
+    stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0, 'unrecognized_shape_labels': 0}
 
     with open(json_file_path, 'r') as file:
         data = json.load(file)
@@ -199,12 +211,18 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
             group_id = shape['group_id'] or 0
             head_x = shape['points'][0][0]
             head_y = shape['points'][0][1]
-            heads[group_id] = (head_x, head_y)
+            if group_id in heads: # If the head is already in the dictionary, remove it and do not add the new one (ambiguous)
+                heads.pop(group_id)
+            else:
+                heads[group_id] = (head_x, head_y)
         elif shape['label'] in settings['tail_classes']:
             group_id = shape['group_id'] or 0
             tail_x = shape['points'][0][0]
             tail_y = shape['points'][0][1]
-            tails[group_id] = (tail_x, tail_y)
+            if group_id in tails: # If the tail is already in the dictionary, remove it and do not add the new one (ambiguous)
+                tails.pop(group_id)
+            else:
+                tails[group_id] = (tail_x, tail_y)
         elif shape['label'] in settings['dolphin_classes']:
             # Extract points
             points = shape['points']
@@ -236,6 +254,8 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
                 stats['unique_labels'] += 1
             else:
                 stats['duplicate_labels'] += 1
+        else:
+            stats['unrecognized_shape_labels'] += 1
 
     image_width = data['imageWidth']
     image_height = data['imageHeight']
@@ -260,15 +280,16 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
                 head_x, head_y = heads[track]
                 tail_x, tail_y = tails[track]
 
+                # TODO: Modularize this
                 orientation_x = head_x - tail_x
                 orientation_y = tail_y - head_y # (Y is reversed in this coordinate system)
 
-                orientations.append((orientation_x, orientation_y))
+                orientations.append((i, orientation_x, orientation_y))
             else:
                 stats['dolphins_without_keypoints'] += 1
-                stats['unique_labels'] -= 1
-                labels.pop(i)
-                tracks.pop(i)
+                # stats['unique_labels'] -= 1
+                # labels.pop(i)
+                # tracks.pop(i)
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
     else:
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]

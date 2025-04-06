@@ -73,6 +73,7 @@ class DolphinOrientationDataset(Dataset):
     def get_image_path(self, idx):
         return self.annotations[idx]['image']
 
+    # TODO: Modularize this and the following function to share functionality
     def _load_annotations_from_dataset_dir(self, dataset_root_path):
         annotations = []
         labels_dir_path = dataset_root_path / settings['labels_dir']
@@ -89,10 +90,15 @@ class DolphinOrientationDataset(Dataset):
 
             image_path = self.images_index[label_file_path.stem]
 
-            for line, orientation, track in zip(label_file_path.read_text().splitlines(),
-                                         orientation_file_path.read_text().splitlines(),
-                                         track_file_path.read_text().splitlines()):
+            orientations = {int(label_index): [float(x), float(y)] for label_index, x, y in
+                            [val.split() for val in orientation_file_path.read_text().splitlines()]}
 
+            for label_index, (line, track) in enumerate(zip(label_file_path.read_text().splitlines(),
+                                                          track_file_path.read_text().splitlines())):
+                if label_index not in orientations:
+                    continue
+
+                track = int(track)
                 # The following is still in the YOLO coordinate system (normalized from 0-1)
                 _, x_center, y_center, width, height = map(float, line.split())
 
@@ -102,8 +108,7 @@ class DolphinOrientationDataset(Dataset):
                 y_bottom_right = y_center + height / 2
 
                 bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
-                orientation_x, orientation_y = map(float, orientation.split())
-                track = int(track)
+                orientation_x, orientation_y = orientations[label_index]
 
                 annotations.append({'image': image_path, 'bbox': bbox, 'orientation': [orientation_x, orientation_y], 'track': track})
 
