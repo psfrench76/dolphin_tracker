@@ -13,11 +13,16 @@ class OrientationResNet(nn.Module):
         x = self.resnet(x)
         return x
 
-    def predict_orientation(self, x):
-        outputs = self.forward(x)
+    def calculate_angles(self, outputs):
         x_val, y_val = outputs[:, 0], outputs[:, 1]
         angle = torch.atan2(y_val, x_val) * (180 / torch.pi)  # Convert radians to degrees
         return angle
 
     def compute_loss(self, predictions, targets):
         return self.loss_fn(predictions, targets)
+
+    def save_angles(self, outputs, file_path):
+        angles = self.calculate_angles(outputs)
+        with open(file_path, 'w') as f:
+            for angle in angles:
+                f.write(f"{angle.item()}\n")

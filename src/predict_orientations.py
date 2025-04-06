@@ -1,10 +1,13 @@
-from .utils.inc.orientation_network import OrientationResNet
-from .utils.inc.orientation_dataloader import DolphinOrientationDataset
+from utils.inc.orientation_network import OrientationResNet
+from utils.inc.orientation_dataloader import DolphinOrientationDataset
+from utils.inc.settings import set_seed
 
 import torch
 from torchvision import transforms
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+set_seed(0)
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -14,13 +17,21 @@ transform = transforms.Compose([
 ])
 
 # TODO: parameterize this, etc
-dummy_dataset = "../data/toy_100"
+dummy_dataset = "../data/toy_orientations"
 dataset = DolphinOrientationDataset(dataset_root_dir=dummy_dataset, transform=transform)
+
+# # Inspect a few samples
+# for i in range(min(5, len(dataset))):
+#     images, targets = dataset[i]
+#     print(f"Sample {i}:")
+#     print(f"Image shape: {images.shape}")
+#     print(f"Targets: {targets}")
 
 model = OrientationResNet()
 model.to(device)
 
-for images, targets in dataset:
-    images.to(device)
-    targets.to(device)
+for images, _ in dataset:
+    images = images.unsqueeze(0).to(device)
     outputs = model(images)
+
+    print(outputs)
