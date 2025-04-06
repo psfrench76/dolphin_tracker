@@ -1,13 +1,42 @@
-from utils.inc.orientation_network import OrientationResNet
-from utils.inc.orientation_dataloader import DolphinOrientationDataset
-from utils.inc.settings import set_seed
+import pandas as pd
+from tqdm import tqdm
 
+from utils.inc.orientation_network import OrientationResNet
+from utils.inc.orientation_dataset import DolphinOrientationDataset
+from utils.inc.settings import set_seed
+from torch.utils.data import DataLoader
+
+import psutil
 import torch
 from torchvision import transforms
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 set_seed(0)
+# TODO: parameterize this, etc
+dataset_dir = "../data/toy_orientations"
+weights = "orientation_resnet.pth"
+outfile_path = "final_outputs.txt"
+
+# TODO - this (cuda and workers) is (almost) the same as in train.py. Let's modularize this stuff.
+#   Note that the UL module uses an array of numbers though. When modularizing make sure that mutli-GPU isn't broken for UL.
+num_cores = len(psutil.Process().cpu_affinity())
+
+# Set the number of workers to the recommended value
+num_workers = int(min(16, num_cores) / 2)
+
+print(f"Number of available CPU cores: {num_cores}")
+print(f"Setting number of workers to: {num_workers} (divided by 2 for train/val split)")
+
+# Check for CUDA availability
+if torch.cuda.is_available():
+    print("CUDA is available.")
+    gpu_count = torch.cuda.device_count()
+    device = torch.device("cuda")
+    print(f"Using GPU device(s): {device}. Total GPUs: {gpu_count}")
+else:
+    print("CUDA is not available.")
+    device = torch.device("cpu")
+
+print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -16,22 +45,41 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
-# TODO: parameterize this, etc
-dummy_dataset = "../data/toy_orientations"
-dataset = DolphinOrientationDataset(dataset_root_dir=dummy_dataset, transform=transform)
-
-# # Inspect a few samples
-# for i in range(min(5, len(dataset))):
-#     images, targets = dataset[i]
-#     print(f"Sample {i}:")
-#     print(f"Image shape: {images.shape}")
-#     print(f"Targets: {targets}")
+dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, transform=transform)
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=num_workers)
 
 model = OrientationResNet()
+model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
 model.to(device)
 
-for images, _ in dataset:
-    images = images.unsqueeze(0).to(device)
-    outputs = model(images)
+model.eval()
+all_outputs = []
+all_indices = []
+all_tracks = []
 
-    print(outputs)
+print(f"Model loaded. Predicting on {len(dataset)} images.")
+with torch.no_grad():
+    for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting", unit="batch"):
+        images = images.to(device)
+        outputs = model(images)
+        all_outputs.append(outputs)
+        all_indices.append(idxs)
+        all_tracks.append(tracks)
+
+all_outputs = torch.cat(all_outputs, dim=0).cpu()
+all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
+all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
+all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
+
+print(f"Predictions complete. Saving to {outfile_path}")
+
+# Create a DataFrame
+data = {
+    'dataloader_index': all_indices,
+    'filename': all_filenames,
+    'object_id': all_tracks,
+}
+other_df = pd.DataFrame(data)
+
+model.write_outputs(all_outputs, other_df, outfile_path)
+print(f"Final angles saved to {outfile_path}")

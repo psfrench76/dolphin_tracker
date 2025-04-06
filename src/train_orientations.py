@@ -2,13 +2,13 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from utils.inc.orientation_network import OrientationResNet
-from utils.inc.orientation_dataloader import DolphinOrientationDataset
+from utils.inc.orientation_dataset import DolphinOrientationDataset
 from utils.inc.settings import set_seed
 
 def train(model, dataloader, criterion, optimizer, device):
     model.train()
     running_loss = 0.0
-    for images, targets in dataloader:
+    for images, targets, _, _ in dataloader:
         images = images.to(device)
         targets = targets.to(device)
 
@@ -41,7 +41,7 @@ def main():
     criterion = model.compute_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    num_epochs = 10
+    num_epochs = 150
     for epoch in range(num_epochs):
         epoch_loss = train(model, dataloader, criterion, optimizer, device)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
@@ -52,12 +52,16 @@ def main():
     # Save the final angles to a file
     model.eval()
     all_outputs = []
+    all_indices = []
     with torch.no_grad():
-        for images, _ in dataloader:
+        for images, _, idxs in dataloader:
             images = images.to(device)
             outputs = model(images)
             all_outputs.append(outputs)
+            all_indices.append(idxs)
     all_outputs = torch.cat(all_outputs, dim=0)
+    all_indices = torch.cat(all_indices, dim=0)
+    model.write_outputs(all_outputs, all_indices, "final_outputs.txt")
     model.save_angles(all_outputs, "final_angles.txt")
     print("Final angles saved to final_angles.txt")
 
