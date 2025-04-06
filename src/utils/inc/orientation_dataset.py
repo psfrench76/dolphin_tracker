@@ -26,6 +26,12 @@ class DolphinOrientationDataset(Dataset):
         for orientations_file in orientations_files:
             self.orientations_index[orientations_file.stem] = orientations_file
 
+        self.tracks_dir = self.dataset_root_path / settings['tracks_dir']
+        tracks_files = sorted(self.tracks_dir.iterdir())
+        self.tracks_index = {}
+        for tracks_file in tracks_files:
+            self.tracks_index[tracks_file.stem] = tracks_file
+
         if annotations:
             annotations_path = Path(annotations)
             images_index_path = Path(images_index_file)
@@ -47,6 +53,7 @@ class DolphinOrientationDataset(Dataset):
 
         bbox = self.annotations[idx]['bbox']
         orientation = self.annotations[idx]['orientation']
+        track = self.annotations[idx]['track']
 
         # Crop the image using the bounding box
         x_top_left, y_top_left, x_bottom_right, y_bottom_right = bbox
@@ -61,8 +68,10 @@ class DolphinOrientationDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, torch.tensor(orientation, dtype=torch.float32)
+        return image, torch.tensor(orientation, dtype=torch.float32), track, idx
 
+    def get_image_path(self, idx):
+        return self.annotations[idx]['image']
 
     def _load_annotations_from_dataset_dir(self, dataset_root_path):
         annotations = []
@@ -73,10 +82,16 @@ class DolphinOrientationDataset(Dataset):
             else:
                 orientation_file_path = self.orientations_index[label_file_path.stem]
 
+            if label_file_path.stem not in self.tracks_index:
+                raise FileNotFoundError(f"Track file for {label_file_path.stem} not found.")
+            else:
+                track_file_path = self.tracks_index[label_file_path.stem]
+
             image_path = self.images_index[label_file_path.stem]
 
-            for line, orientation in zip(label_file_path.read_text().splitlines(),
-                                         orientation_file_path.read_text().splitlines()):
+            for line, orientation, track in zip(label_file_path.read_text().splitlines(),
+                                         orientation_file_path.read_text().splitlines(),
+                                         track_file_path.read_text().splitlines()):
 
                 # The following is still in the YOLO coordinate system (normalized from 0-1)
                 _, x_center, y_center, width, height = map(float, line.split())
@@ -88,8 +103,9 @@ class DolphinOrientationDataset(Dataset):
 
                 bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
                 orientation_x, orientation_y = map(float, orientation.split())
+                track = int(track)
 
-                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': [orientation_x, orientation_y]})
+                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': [orientation_x, orientation_y], 'track': track})
 
         return annotations
 
@@ -99,7 +115,7 @@ class DolphinOrientationDataset(Dataset):
         with open(yolo_file, 'r') as file:
             with open(images_index_file, 'r') as index_file:
                 for line, image_file_name in zip(file, index_file):
-                    x_center, y_center, width, height = map(float, line.strip().split(',')[2:6])
+                    track, x_center, y_center, width, height = map(float, line.strip().split(',')[1:6])
 
                     x_top_left = x_center - width / 2
                     y_top_left = y_center - height / 2
@@ -110,6 +126,6 @@ class DolphinOrientationDataset(Dataset):
                     bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
                     orientation = [None, None]
 
-                    annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation})
+                    annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation, 'track': track})
 
         return annotations
