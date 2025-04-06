@@ -4,6 +4,7 @@ from torchvision import transforms
 from PIL import Image
 from pathlib import Path
 from .settings import settings
+from .orientation_io import crop_image_with_bbox
 
 class DolphinOrientationDataset(Dataset):
 
@@ -47,23 +48,11 @@ class DolphinOrientationDataset(Dataset):
         return len(self.annotations)
 
     def __getitem__(self, idx):
-        img_path = self.annotations[idx]['image']
-        image = Image.open(img_path).convert("RGB")
-        width, height = image.size
-
-        bbox = self.annotations[idx]['bbox']
         orientation = self.annotations[idx]['orientation']
         track = self.annotations[idx]['track']
-
-        # Crop the image using the bounding box
-        x_top_left, y_top_left, x_bottom_right, y_bottom_right = bbox
-
-        x1 = int(x_top_left * width)
-        y1 = int(y_top_left * height)
-        x2 = int(x_bottom_right * width)
-        y2 = int(y_bottom_right * height)
-
-        image = image.crop((x1, y1, x2, y2))
+        img_path = self.annotations[idx]['image']
+        bbox = self.annotations[idx]['bbox']
+        image = crop_image_with_bbox(img_path, bbox, 'yolo')
 
         if self.transform:
             image = self.transform(image)
@@ -102,15 +91,9 @@ class DolphinOrientationDataset(Dataset):
                 # The following is still in the YOLO coordinate system (normalized from 0-1)
                 _, x_center, y_center, width, height = map(float, line.split())
 
-                x_top_left = x_center - width / 2
-                y_top_left = y_center - height / 2
-                x_bottom_right = x_center + width / 2
-                y_bottom_right = y_center + height / 2
+                bbox = [x_center, y_center, width, height]
 
-                bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
-                orientation_x, orientation_y = orientations[label_index]
-
-                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': [orientation_x, orientation_y], 'track': track})
+                annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientations[label_index], 'track': track})
 
         return annotations
 
@@ -122,13 +105,9 @@ class DolphinOrientationDataset(Dataset):
                 for line, image_file_name in zip(file, index_file):
                     track, x_center, y_center, width, height = map(float, line.strip().split(',')[1:6])
 
-                    x_top_left = x_center - width / 2
-                    y_top_left = y_center - height / 2
-                    x_bottom_right = x_center + width / 2
-                    y_bottom_right = y_center + height / 2
-
                     image_path = self.dataset_root_path / settings['images_dir'] / image_file_name.strip()
-                    bbox = [x_top_left, y_top_left, x_bottom_right, y_bottom_right]
+
+                    bbox = [x_center, y_center, width, height]
                     orientation = [None, None]
 
                     annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation, 'track': track})
