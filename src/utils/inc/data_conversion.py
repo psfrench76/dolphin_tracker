@@ -10,8 +10,6 @@ import json
 import math
 
 
-# TODO: Dataset conversion functionality to create annotations (stored as x and y values)
-
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
 # to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
 # dataset directory. It also saves the track IDs to the tracks directory in the dataset directory.
@@ -34,6 +32,7 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     dataset_dir_path = Path(dataset_dir_path)
     label_dir_path = dataset_dir_path / settings['labels_dir']
     track_dir_path = dataset_dir_path / settings['tracks_dir']
+    orientation_file_path = None
 
     label_dir_path.mkdir(parents=True, exist_ok=True)
     track_dir_path.mkdir(parents=True, exist_ok=True)
@@ -41,8 +40,12 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     label_file_path = label_dir_path / f"{json_file_path.stem}.txt"
     track_file_path = track_dir_path / f"{json_file_path.stem}.txt"
 
-    labels, tracks, orientations, unique_stats = _load_unique_labels(json_file_path,
-                                                        oriented_bbox=oriented_bbox)  # Loads labels and deduplicates
+    if xy_orientation:
+        orientation_dir_path = dataset_dir_path / settings['orientations_dir']
+        orientation_dir_path.mkdir(parents=True, exist_ok=True)
+        orientation_file_path = orientation_dir_path / f"{json_file_path.stem}.txt"
+
+    labels, tracks, orientations, unique_stats = _load_unique_labels(json_file_path, oriented_bbox=oriented_bbox, xy_orientation=xy_orientation)  # Loads labels and deduplicates
     trim_stats = _trim_negative_coordinates(labels,
                                             oriented_bbox=oriented_bbox)  # Trims labels with negative coordinates
     _increment_all_tracks(tracks)  # Increment all track IDs by 1 -- tracker cannot handle 0s which are endemic
@@ -57,8 +60,6 @@ def convert_and_save_label(json_file_path, dataset_dir_path, oriented_bbox=False
     else:
         _write_label(labels, label_file_path)
         if xy_orientation:
-            orientation_dir_path = dataset_dir_path / settings['orientations_dir']
-            orientation_file_path = orientation_dir_path / f"{json_file_path.stem}.txt"
             _write_orientation(orientations, orientation_file_path)
 
     _write_track(tracks, track_file_path)
@@ -253,6 +254,7 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
         labels = [(x1 / image_width, y1 / image_height, x2 / image_width, y2 / image_height, x3 / image_width,
                    y3 / image_height, x4 / image_width, y4 / image_height) for x1, y1, x2, y2, x3, y3, x4, y4 in labels]
     elif xy_orientation:
+        # We're iterating backwards so that we can remove items from the list without affecting the indices
         for i, (label, track) in reversed(list(enumerate(zip(labels, tracks)))):
             if track in heads and track in tails:
                 head_x, head_y = heads[track]
@@ -270,6 +272,8 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
     else:
         labels = [(x / image_width, y / image_height, w / image_width, h / image_height) for x, y, w, h in labels]
+
+    orientations.reverse()
 
     return labels, tracks, orientations, stats
 
