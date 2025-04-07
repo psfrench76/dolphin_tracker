@@ -19,6 +19,7 @@ def main():
     args = parser.parse_args()
 
     data_config_path = project_path(f"cfg/data/{args.data_name}.yaml")
+    # TODO: make this more robust
     output_folder = args.output_folder
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
     weights_file_path = output_folder / settings['orientations_weights_file']
@@ -55,8 +56,8 @@ def main():
     train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path, transform=transform)
     val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path, transform=transform)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=num_workers)
-    val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=num_workers)
+    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=num_workers)
+    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=num_workers)
 
     model = OrientationResNet()
     model.set_device(device)
@@ -71,7 +72,10 @@ def main():
 
     # Calculate the lambda function for the learning rate schedule
     def lr_lambda(epoch):
-        return lr_end / lr_start + (1 - lr_end / lr_start) * (1 - epoch / (num_epochs - 1))
+        if num_epochs == 1:
+            return lr_start
+        else:
+            return lr_end / lr_start + (1 - lr_end / lr_start) * (1 - epoch / (num_epochs - 1))
 
     scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
 
