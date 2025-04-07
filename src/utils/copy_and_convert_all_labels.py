@@ -28,10 +28,20 @@ def copy_and_convert_all_labels(json_source_dir, dataset_root_dr, oriented_bbox=
         frame_stats = convert_and_save_label(json_file, dataset_root_path, oriented_bbox, xy_orientations)
         converted_count += 1
         for key, value in frame_stats.items():
-            if key not in run_stats:
-                run_stats[key] = {json_file.stem: value}
+            if key == 'unrecognized_shape_labels':
+                if key not in run_stats:
+                    run_stats[key] = value
+                else:
+                    for label, count in value.items():
+                        if label not in run_stats[key]:
+                            run_stats[key][label] = count
+                        else:
+                            run_stats[key][label] += count
             else:
-                run_stats[key][json_file.stem] = value
+                if key not in run_stats:
+                    run_stats[key] = {json_file.stem: value}
+                else:
+                    run_stats[key][json_file.stem] = value
 
     print_run_stats(run_stats)
     print(f"Total frames converted: {converted_count}")

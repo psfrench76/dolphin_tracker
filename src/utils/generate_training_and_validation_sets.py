@@ -29,6 +29,7 @@ import shutil
 import random
 from pathlib import Path
 from inc.settings import settings
+import os
 
 
 # Generate training and validation sets from COMPLETE_SOURCE_DIR_PATH and DATASET_ROOT_PATH.
@@ -64,12 +65,15 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
 
     train_images_dir_path = train_dir_path / settings['images_dir']
     train_labels_dir_path = train_dir_path / settings['labels_dir']
+    train_orientations_dir_path = train_dir_path / settings['orientations_dir']
 
     valid_images_dir_path = valid_dir_path / settings['images_dir']
     valid_labels_dir_path = valid_dir_path / settings['labels_dir']
+    valid_orientations_dir_path = valid_dir_path / settings['orientations_dir']
 
     test_images_dir_path = test_dir_path / settings['images_dir']
     test_labels_dir_path = test_dir_path / settings['labels_dir']
+    test_orientations_dir_path = test_dir_path / settings['orientations_dir']
 
     train_images_dir_path.mkdir(parents=True, exist_ok=True)
     train_labels_dir_path.mkdir(parents=True, exist_ok=True)
@@ -77,10 +81,14 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     valid_images_dir_path.mkdir(parents=True, exist_ok=True)
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
 
+    if test_orientations_dir_path.exists():
+        train_orientations_dir_path.mkdir(parents=True, exist_ok=True)
+        valid_orientations_dir_path.mkdir(parents=True, exist_ok=True)
+
     test_images = set(test_images_dir_path.glob('*.jpg'))
     # Find all images in the source directory, including those behind symlinks (getting around limitation in pathlib)
     source_images = [Path(root) / file for root, _, files in
-                     complete_source_dir_path.walk(complete_source_dir_path, follow_symlinks=True) for file in files if
+                     os.walk(complete_source_dir_path, followlinks=True) for file in files if
                      file.endswith('.jpg')]
 
     train_set = []
@@ -93,10 +101,15 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
         if image_file.name not in [img.name for img in test_images]:
             label_file = image_file.parent.parent / settings['labels_dir'] / image_file.with_suffix('.txt').name
             if label_file.exists():
+                orientation_file = image_file.parent.parent / settings['orientations_dir'] / image_file.with_suffix('.txt').name
+                if not orientation_file.exists():
+                    orientation_file = None
+
                 if label_file.stat().st_size == 0:
-                    train_set_negative.append((image_file, label_file))
+                    train_set_negative.append((image_file, label_file, orientation_file))
                 else:
-                    train_set.append((image_file, label_file))
+                    train_set.append((image_file, label_file, orientation_file))
+
 
     negative_count = len(train_set_negative)
     # Handle negative examples based on negative_example_fraction
@@ -109,18 +122,27 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     for image_file in test_images:
         label_file = test_labels_dir_path / (image_file.stem + '.txt')
         if label_file.exists():
-            valid_set.append((image_file, label_file))
+            orientation_file = test_orientations_dir_path / (image_file.stem + '.txt')
+            if not orientation_file.exists():
+                orientation_file = None
+            valid_set.append((image_file, label_file, orientation_file))
         else:
             images_without_labels_count += 1
 
+
     # Copy files to train and valid folders
-    for image_path, label_path in train_set:
+    for image_path, label_path, orientation_path in train_set:
         shutil.copy(image_path, train_images_dir_path / image_path.name)
         shutil.copy(label_path, train_labels_dir_path / label_path.name)
+        if orientation_path:
+            shutil.copy(orientation_path, train_orientations_dir_path / orientation_path.name)
 
-    for image_path, label_path in valid_set:
+    for image_path, label_path, orientation_path in valid_set:
         shutil.copy(image_path, valid_images_dir_path / image_path.name)
         shutil.copy(label_path, valid_labels_dir_path / label_path.name)
+        if orientation_path:
+            shutil.copy(orientation_path, valid_orientations_dir_path / orientation_path.name)
+
 
     total_dataset_size = len(train_set) + len(test_images)
     print(f"Total images in source directory: {len(source_images)}")

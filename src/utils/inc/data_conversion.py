@@ -8,7 +8,7 @@ from .settings import settings
 from pathlib import Path
 import json
 import math
-
+#   TODO: reformat output to have totals at bottom and any "frame by frame" at top. Only show keypoints if keypoints are actually being processed.
 #   TODO: any time tracks are changed (including during regeneration) we should update the orientations as well.
 # This function takes a single JSON file path and a dataset directory path, and converts the labels in the JSON file
 # to the YOLO format and saves them to a file with the same name (but a .txt extension) in the labels directory in the
@@ -114,7 +114,7 @@ def print_run_stats(run_stats):
         elif key == 'unrecognized_shape_labels':
             if sum(value.values()) > 0:
                 print(f"Total unrecognized shape labels: {sum(value.values())}")
-                print(f"Unrecognized shape labels by frame:")
+                print(f"Unrecognized shape labels by label:")
                 for k, v in sorted(value.items()):
                     if v > 0:
                         print(f"  {k}: {v}")
@@ -201,7 +201,7 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
     heads = {}
     tails = {}
     orientations = []
-    stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0, 'unrecognized_shape_labels': 0}
+    stats = {'unique_labels': 0, 'duplicate_labels': 0, 'dolphins_without_keypoints': 0, 'unrecognized_shape_labels': {}}
 
     with open(json_file_path, 'r') as file:
         data = json.load(file)
@@ -255,7 +255,10 @@ def _load_unique_labels(json_file_path, oriented_bbox=False, xy_orientation=Fals
             else:
                 stats['duplicate_labels'] += 1
         else:
-            stats['unrecognized_shape_labels'] += 1
+            if shape['label'] in stats['unrecognized_shape_labels']:
+                stats['unrecognized_shape_labels'][shape['label']] += 1
+            else:
+                stats['unrecognized_shape_labels'][shape['label']] = 1
 
     image_width = data['imageWidth']
     image_height = data['imageHeight']

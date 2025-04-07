@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 from inc.settings import settings
 
-
+# TODO: update documentation and rename this script
 # Copy images, labels, and tracks from source_dataset_root to dest_dataset_root whose frame numbers are between
 # start_frame and end_frame. The range is inclusive of the start_frame and exclusive of the end_frame.
 def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_frame, skip_images_without_labels):
@@ -27,14 +27,18 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
     source_images_path = source_dataset_root_path / settings['images_dir']
     source_labels_path = source_dataset_root_path / settings['labels_dir']
     source_tracks_path = source_dataset_root_path / settings['tracks_dir']
+    source_orientations_path = source_dataset_root_path / settings['orientations_dir']
 
     dest_images_path = dest_dataset_root_path / settings['images_dir']
     dest_labels_path = dest_dataset_root_path / settings['labels_dir']
     dest_tracks_path = dest_dataset_root_path / settings['tracks_dir']
+    dest_orientations_path = dest_dataset_root_path / settings['orientations_dir']
 
     dest_images_path.mkdir(parents=True, exist_ok=True)
     dest_labels_path.mkdir(parents=True, exist_ok=True)
     dest_tracks_path.mkdir(parents=True, exist_ok=True)
+    if source_orientations_path.exists():
+        dest_orientations_path.mkdir(parents=True, exist_ok=True)
 
     frame_id_pattern = re.compile(r'_(\d+)\.')
 
@@ -42,6 +46,7 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
     copied_images_count = 0
     copied_labels_count = 0
     copied_tracks_count = 0
+    copied_orientations_count = 0
     skipped_images = []
 
     for source_image_file in source_images_path.iterdir():
@@ -51,6 +56,7 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
             if start_frame <= frame_number < end_frame:
                 source_label_file = source_labels_path / (source_image_file.stem + '.txt')
                 source_track_file = source_tracks_path / (source_image_file.stem + '.txt')
+                source_orientation_file = source_orientations_path / (source_image_file.stem + '.txt')
                 if not skip_images_without_labels or source_label_file.exists():
                     dest_image_file = dest_images_path / source_image_file.name
                     shutil.copy(source_image_file, dest_image_file)
@@ -62,6 +68,10 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
                         dest_track_file = dest_tracks_path / source_track_file.name
                         shutil.copy(source_track_file, dest_track_file)
                         copied_tracks_count += 1
+                    if source_orientation_file.exists():
+                        dest_orientation_file = dest_orientations_path / source_orientation_file.name
+                        shutil.copy(source_orientation_file, dest_orientation_file)
+                        copied_orientations_count += 1
                     copied_frames_count += 1
                     copied_images_count += 1
                 else:
@@ -71,6 +81,7 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
     print(f"Total images copied: {copied_images_count}")
     print(f"Total labels copied: {copied_labels_count}")
     print(f"Total tracks copied: {copied_tracks_count}")
+    print(f"Total orientations copied: {copied_orientations_count}")
     if skipped_images:
         print(f"WARNING: Skipped {len(skipped_images)} images without labels:")
         for image_file_name in skipped_images:
