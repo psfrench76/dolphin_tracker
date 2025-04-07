@@ -16,11 +16,19 @@ def main():
     parser = argparse.ArgumentParser(description="Train the orientation model.")
     parser.add_argument('--data_name', '-d', type=str, required=True, help="Name of the dataset configuration file.")
     parser.add_argument('--output_folder', '-o', type=Path, required=True, help="Path to the output folder.")
+    parser.add_argument('--hyp_path', '-h', type=str, default='default', help="Path to the hyperparameters file.")
     args = parser.parse_args()
 
     data_config_path = project_path(f"cfg/data/{args.data_name}.yaml")
     # TODO: make this more robust
     output_folder = args.output_folder
+    if args.hyp_path == 'default':
+        hyp_path = None
+    else:
+        hyp_path = Path(args.hyp_path)
+        # TODO: Hyperparameter config parsing
+        raise NotImplementedError("Hyperparameter config parsing not implemented yet.")
+
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
     weights_file_path = output_folder / settings['orientations_weights_file']
 
