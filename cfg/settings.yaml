@@ -81,13 +81,16 @@ dolphin_classes:
   - dolphin
   - box
   - rectangle
+  - box2
 
 head_classes:
   - Head
   - snout
+  - head
 
 tail_classes:
   - Tail
+  - tail
 
 # File columns
 bbox_file_columns:
