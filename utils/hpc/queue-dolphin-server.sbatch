@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -J dolphin-server    # name of my job
 #SBATCH -A eecs
-#SBATCH -p dgx2,gpu
+#SBATCH -p dgx2
 #SBATCH -o /nfs/stak/users/frenchp/logs/jupyter/dolphin-server.out        # name of output file for batch script
 #SBATCH -e /nfs/stak/users/frenchp/logs/jupyter/dolphin-server.err        # name of error file for batch script
 #SBATCH -c 4             # number of cores per task. Should be #GPU * 4 at least.
