@@ -16,17 +16,17 @@ class DolphinOrientationDataset(Dataset):
     def __init__(self, dataset_root_dir, annotations=None, images_index_file=None, transform=None):
         self.dataset_root_path = Path(dataset_root_dir)
 
+
+    #TODO: I think a lot of indexing is happening when it doesn't need to, i.e. things are coming from YOLO. Investigate.
         self.image_dir = self.dataset_root_path / settings['images_dir']
         image_files = sorted([f for f in self.image_dir.iterdir() if f.suffix in settings['image_file_extensions']])
         self.images_index = {}
         for image_file in image_files:
             self.images_index[image_file.stem] = image_file
 
-        self.orientations_dir = self.dataset_root_path / settings['orientations_dir']
-        orientations_files = sorted(self.orientations_dir.iterdir())
+
         self.orientations_index = {}
-        for orientations_file in orientations_files:
-            self.orientations_index[orientations_file.stem] = orientations_file
+        self.orientations_dir = self.dataset_root_path / settings['orientations_dir']
 
         self.tracks_dir = self.dataset_root_path / settings['tracks_dir']
         tracks_files = sorted(self.tracks_dir.iterdir())
@@ -41,6 +41,10 @@ class DolphinOrientationDataset(Dataset):
                 raise FileNotFoundError(f"Annotations or images index file not found: {annotations_path}, {images_index_path}")
             self.annotations = self._convert_annotations_from_yolo(annotations_path, images_index_path)
         else:
+            orientations_files = sorted(self.orientations_dir.iterdir())
+            for orientations_file in orientations_files:
+                self.orientations_index[orientations_file.stem] = orientations_file
+
             self.annotations = self._load_annotations_from_dataset_dir(self.dataset_root_path)
 
         self.transform = transform
@@ -55,10 +59,15 @@ class DolphinOrientationDataset(Dataset):
         bbox = self.annotations[idx]['bbox']
         image = crop_image_with_bbox(img_path, bbox, 'yolo')
 
+        if orientation is None:
+            orientation = torch.empty(0, 0, dtype=torch.float32)
+        else:
+            orientation = torch.tensor(orientation, dtype=torch.float32)
+
         if self.transform:
             image = self.transform(image)
 
-        return image, torch.tensor(orientation, dtype=torch.float32), track, idx
+        return image, orientation, track, idx
 
     def get_image_path(self, idx):
         return self.annotations[idx]['image']
@@ -101,13 +110,13 @@ class DolphinOrientationDataset(Dataset):
         annotations = []
         with open(yolo_file, 'r') as file:
             with open(images_index_file, 'r') as index_file:
-                for line, image_file_name in zip(file, index_file):
+                for line, image_path in zip(file, index_file):
                     track, x_center, y_center, width, height = map(float, line.strip().split(',')[1:6])
-
-                    image_path = self.dataset_root_path / settings['images_dir'] / image_file_name.strip()
+                    track = int(track)
+                    image_path = Path(image_path.strip())
 
                     bbox = [x_center, y_center, width, height]
-                    orientation = [None, None]
+                    orientation = None
 
                     annotations.append({'image': image_path, 'bbox': bbox, 'orientation': orientation, 'track': track})
 

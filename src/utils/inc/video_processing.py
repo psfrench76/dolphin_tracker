@@ -36,26 +36,23 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
 
     run_name = output_folder.name
     output_folder.mkdir(parents=True, exist_ok=True)
+    oriented_bbox = False
 
     # Get bounding boxes
     if not bbox_path:
         all_bboxes = _get_bboxes_from_dataset_root(dataset_root_path)
         output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
+        if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
+            oriented_bbox = True
     elif bbox_path.suffix == '.txt':
         all_bboxes = _get_bboxes_from_txt(bbox_path)
+        if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
+            oriented_bbox = True
         all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes)
         output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
     else:
         raise ValueError(
             "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
-
-    # Check if all_bboxes has angle column
-
-
-    if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
-        oriented_bbox = True
-    else:
-        oriented_bbox = False
 
 
     # Get image files
@@ -306,12 +303,14 @@ def _get_obb_bbox_from_points(x1, y1, x2, y2, x3, y3, x4, y4, img_width, img_hei
             'orientation_x': orientation_x * img_width, 'orientation_y': orientation_y * img_height}
     return {k: int(v) for k, v in bbox.items()}
 
-# TODO: This should be implemented to read the orientations from the txt file and merge them with the bounding boxes
-#  dataframe. See _get_bboxes_from_dataset_root for the method.
+
 def _get_orientations_from_txt_and_merge(orientations_file, bboxes):
     if orientations_file is None:
         return bboxes
-    raise NotImplementedError("Orientation extraction from txt files is not implemented yet.")
+    else:
+        orientations = pd.read_csv(orientations_file, sep=',', index_col=None)
+        bboxes = pd.concat([bboxes, orientations[['angle']]], axis=1)
+        return bboxes
 
 
 # Assume orientation is in degrees, between -180 and 180

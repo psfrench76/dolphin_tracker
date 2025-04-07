@@ -17,11 +17,15 @@ def main():
     parser.add_argument('--dataset', '-d', type=Path, required=True, help="Path to the dataset root directory.")
     parser.add_argument('--output_folder', '-o', type=Path, required=True, help="Path to the output folder.")
     parser.add_argument('--weights', '-w', type=Path, required=True, help="Path to the model weights file.")
+    parser.add_argument('--tracking_results', '-tr', type=Path, help="Path to the tracking results file (optional).")
+    parser.add_argument('--images_index_file', '-ii', type=Path, help="Path to the images index file (optional).")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
     output_folder = args.output_folder
     weights = args.weights
+    tracking_results = args.tracking_results
+    images_index_file = args.images_index_file
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
 
     output_folder.mkdir(parents=True, exist_ok=True)
@@ -39,8 +43,8 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=num_workers)
+    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, transform=transform, annotations=tracking_results, images_index_file=images_index_file)
+    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
 
     model = OrientationResNet()
     model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))

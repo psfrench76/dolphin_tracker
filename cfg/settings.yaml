@@ -121,6 +121,14 @@ orientation_file_columns:
     - 'x'
     - 'y'
 
+orientation_results_file_columns:
+  - 'angle'
+  - 'x_val'
+  - 'y_val'
+  - 'dataloader_index'
+  - 'filename'
+  - 'object_id'
+
 # Image file settings
 image_file_extensions: # Note that currently jpg is the only fully supported format, but this is for future expansion
   - '.jpg'
