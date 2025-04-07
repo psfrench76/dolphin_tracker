@@ -38,6 +38,7 @@ dataset_test_split: 'test' # Subdirectory of the dataset root
 args_file: 'args.yaml' # Arguments file for track_from_video.py
 evaluation_results_file: 'evaluation_results.txt' # For eval.py
 evolution_log_file: 'evolutions.yaml'
+orientations_weights_file: 'orientations_weights.pth'
 
 # Training results files
 training_results_csv: 'results.csv'
@@ -51,6 +52,7 @@ researcher_output_suffix: 'output.csv'
 prediction_video_suffix: 'predictions.mp4'
 gt_video_suffix: 'gt.mp4'
 images_index_suffix: 'images_index.txt'
+orientations_results_suffix: 'orientations.txt'
 
 # Default tracking configuration files
 ultralytics_bytetrack: 'cfg/trackers/bytetrack_default.yaml' # Relative to project root

@@ -1,9 +1,11 @@
+import argparse
+from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
-from utils.inc.settings import set_seed
+from utils.inc.settings import set_seed, settings
 from tqdm import tqdm
 import pandas as pd
 
@@ -26,6 +28,16 @@ def train(model, dataloader, criterion, optimizer, device):
     return epoch_loss
 
 def main():
+    parser = argparse.ArgumentParser(description="Train the orientation model.")
+    parser.add_argument('--dataset', type=Path, required=True, help="Path to the dataset root directory.")
+    parser.add_argument('--output_folder', type=Path, required=True, help="Path to the output folder.")
+    args = parser.parse_args()
+
+    dataset_root_dir = args.dataset
+    output_folder = args.output_folder
+    outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
+    weights_file_path = output_folder / settings['orientations_weights_file']
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(0)
 
@@ -35,7 +47,6 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    dataset_root_dir = "../data/toy_orientations"
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_root_dir, transform=transform)
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
 
@@ -48,15 +59,14 @@ def main():
         epoch_loss = train(model, dataloader, criterion, optimizer, device)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
 
-    torch.save(model.state_dict(), "orientation_resnet.pth")
-    print("Model saved to orientation_resnet.pth")
+    torch.save(model.state_dict(), weights_file_path)
+    print(f"Model saved to {weights_file_path}")
 
     # Save the final angles to a file
     model.eval()
     all_outputs = []
     all_indices = []
     all_tracks = []
-    outfile_path = "final_outputs.txt"
 
     print(f"Model loaded. Predicting on {len(dataset)} images.")
     with torch.no_grad():
@@ -75,7 +85,7 @@ def main():
     print(f"Predictions complete. Saving to {outfile_path}")
 
     # Create a DataFrame
-    data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
+    data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks}
     other_df = pd.DataFrame(data)
 
     model.write_outputs(all_outputs, other_df, outfile_path)
