@@ -5,9 +5,10 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
-from utils.inc.settings import set_seed, settings
+from utils.inc.settings import set_seed, settings, project_path
 from tqdm import tqdm
 import pandas as pd
+import yaml
 
 def train(model, dataloader, criterion, optimizer, device):
     model.train()
@@ -29,14 +30,29 @@ def train(model, dataloader, criterion, optimizer, device):
 
 def main():
     parser = argparse.ArgumentParser(description="Train the orientation model.")
-    parser.add_argument('--dataset', type=Path, required=True, help="Path to the dataset root directory.")
-    parser.add_argument('--output_folder', type=Path, required=True, help="Path to the output folder.")
+    parser.add_argument('--data_name', '-d', type=str, required=True, help="Name of the dataset configuration file.")
+    parser.add_argument('--output_folder', '-o', type=Path, required=True, help="Path to the output folder.")
     args = parser.parse_args()
 
-    dataset_root_dir = args.dataset
+    data_config_path = project_path(f"cfg/data/{args.data_name}.yaml")
     output_folder = args.output_folder
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
     weights_file_path = output_folder / settings['orientations_weights_file']
+
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    # Load the dataset config
+    with open(data_config_path, 'r') as file:
+        data_config = yaml.safe_load(file)
+
+    dataset_root_dir = Path(data_config['path'])
+
+    # Ensure the dataset root directory exists
+    if not dataset_root_dir.is_dir():
+        # Compensate for ultralytics' pickiness in their configs by removing leading '../'
+        dataset_root_dir = Path(str(dataset_root_dir).lstrip('../'))
+        if not dataset_root_dir.is_dir():
+            raise FileNotFoundError(f"Dataset root directory {dataset_root_dir} does not exist.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(0)
@@ -54,7 +70,7 @@ def main():
     criterion = model.compute_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    num_epochs = 150
+    num_epochs = 2
     for epoch in range(num_epochs):
         epoch_loss = train(model, dataloader, criterion, optimizer, device)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")

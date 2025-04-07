@@ -14,15 +14,17 @@ from torchvision import transforms
 
 def main():
     parser = argparse.ArgumentParser(description="Predict orientations.")
-    parser.add_argument('--dataset', type=Path, required=True, help="Path to the dataset root directory.")
-    parser.add_argument('--output_folder', type=Path, required=True, help="Path to the output folder.")
-    parser.add_argument('--weights', type=Path, required=True, help="Path to the model weights file.")
+    parser.add_argument('--dataset', '-d', type=Path, required=True, help="Path to the dataset root directory.")
+    parser.add_argument('--output_folder', '-o', type=Path, required=True, help="Path to the output folder.")
+    parser.add_argument('--weights', '-w', type=Path, required=True, help="Path to the model weights file.")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
     output_folder = args.output_folder
     weights = args.weights
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
+
+    output_folder.mkdir(parents=True, exist_ok=True)
 
     set_seed(0)
 
