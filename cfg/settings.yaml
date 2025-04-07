@@ -84,6 +84,7 @@ dolphin_classes:
 
 head_classes:
   - Head
+  - snout
 
 tail_classes:
   - Tail

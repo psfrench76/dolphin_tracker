@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
-from utils.inc.settings import set_seed, settings
+from utils.inc.settings import set_seed, settings, get_device_and_workers
 from torch.utils.data import DataLoader
 
 import psutil
@@ -28,25 +28,7 @@ def main():
 
     set_seed(0)
 
-    # TODO - this (cuda and workers) is (almost) the same as in train.py. Let's modularize this stuff.
-    #   Note that the UL module uses an array of numbers though. When modularizing make sure that mutli-GPU isn't broken for UL.
-    num_cores = len(psutil.Process().cpu_affinity())
-
-    # Set the number of workers to the recommended value
-    num_workers = int(min(16, num_cores) / 2)
-
-    print(f"Number of available CPU cores: {num_cores}")
-    print(f"Setting number of workers to: {num_workers} (divided by 2 for train/val split)")
-
-    # Check for CUDA availability
-    if torch.cuda.is_available():
-        print("CUDA is available.")
-        gpu_count = torch.cuda.device_count()
-        device = torch.device("cuda")
-        print(f"Using GPU device(s): {device}. Total GPUs: {gpu_count}")
-    else:
-        print("CUDA is not available.")
-        device = torch.device("cpu")
+    device, num_workers = get_device_and_workers()
 
     print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
@@ -62,25 +44,9 @@ def main():
 
     model = OrientationResNet()
     model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
-    model.to(device)
+    model.set_device(device)
 
-    model.eval()
-    all_outputs = []
-    all_indices = []
-    all_tracks = []
-
-    print(f"Model loaded. Predicting on {len(dataset)} images.")
-    with torch.no_grad():
-        for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting", unit="batch"):
-            images = images.to(device)
-            outputs = model(images)
-            all_outputs.append(outputs)
-            all_indices.append(idxs)
-            all_tracks.append(tracks)
-
-    all_outputs = torch.cat(all_outputs, dim=0).cpu()
-    all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
-    all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
+    all_outputs, all_indices, all_tracks = model.predict(dataloader)
     all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
 
     print(f"Predictions complete. Saving to {outfile_path}")

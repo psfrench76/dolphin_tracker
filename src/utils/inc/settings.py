@@ -55,3 +55,28 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+def get_device_and_workers():
+    import psutil
+    from torch import cuda, device
+    # TODO - this (cuda and workers) is (almost) the same as in train.py. Let's modularize this stuff.
+    #   Note that the UL module uses an array of numbers though. When modularizing make sure that mutli-GPU isn't broken for UL.
+    num_cores = len(psutil.Process().cpu_affinity())
+
+    # Set the number of workers to the recommended value
+    num_workers = int(min(16, num_cores) / 2)
+
+    print(f"Number of available CPU cores: {num_cores}")
+    print(f"Setting number of workers to: {num_workers} (divided by 2 for train/val split)")
+
+    # Check for CUDA availability
+    if cuda.is_available():
+        print("CUDA is available.")
+        gpu_count = cuda.device_count()
+        device = device("cuda")
+        print(f"Using GPU device(s): {device}. Total GPUs: {gpu_count}")
+    else:
+        print("CUDA is not available.")
+        device = device("cpu")
+
+    return device, num_workers

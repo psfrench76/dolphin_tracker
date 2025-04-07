@@ -3,30 +3,14 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
+from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import LambdaLR
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
-from utils.inc.settings import set_seed, settings, project_path
-from tqdm import tqdm
+from utils.inc.settings import set_seed, settings, project_path, get_device_and_workers
 import pandas as pd
 import yaml
-
-def train(model, dataloader, criterion, optimizer, device):
-    model.train()
-    running_loss = 0.0
-    for images, targets, _, _ in dataloader:
-        images = images.to(device)
-        targets = targets.to(device)
-
-        optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item() * images.size(0)
-
-    epoch_loss = running_loss / len(dataloader.dataset)
-    return epoch_loss
+import time
 
 def main():
     parser = argparse.ArgumentParser(description="Train the orientation model.")
@@ -41,20 +25,20 @@ def main():
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    # Load the dataset config
+    # Initialize TensorBoard SummaryWriter
+    writer = SummaryWriter(log_dir=output_folder)
+
     with open(data_config_path, 'r') as file:
         data_config = yaml.safe_load(file)
 
     dataset_root_dir = Path(data_config['path'])
 
-    # Ensure the dataset root directory exists
     if not dataset_root_dir.is_dir():
-        # Compensate for ultralytics' pickiness in their configs by removing leading '../'
-        dataset_root_dir = Path(str(dataset_root_dir).lstrip('../'))
+        dataset_root_dir = Path(str(dataset_root_dir).lstrip('../')) # Ultralytics configs have an extra ../
         if not dataset_root_dir.is_dir():
             raise FileNotFoundError(f"Dataset root directory {dataset_root_dir} does not exist.")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device, num_workers = get_device_and_workers()
     set_seed(0)
 
     transform = transforms.Compose([
@@ -63,49 +47,67 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_root_dir, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=4)
+    # Ultralytics likes the dataset to point to the "images" folder, but I don't like that. In the interest of
+    # maintaining the config format, I will .parent them.
+    train_data_path = (dataset_root_dir / data_config['train']).parent
+    val_data_path = (dataset_root_dir / data_config['val']).parent
 
-    model = OrientationResNet().to(device)
-    criterion = model.compute_loss
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path, transform=transform)
+    val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path, transform=transform)
 
-    num_epochs = 2
-    for epoch in range(num_epochs):
-        epoch_loss = train(model, dataloader, criterion, optimizer, device)
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=num_workers)
+    val_dataloader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=num_workers)
+
+    model = OrientationResNet()
+    model.set_device(device)
+
+    lr_start = 0.001
+    lr_final_factor = 0.01
+    num_epochs = 100
+    lr_end = lr_start * lr_final_factor
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr_start)
+
+
+    # Calculate the lambda function for the learning rate schedule
+    def lr_lambda(epoch):
+        return lr_end / lr_start + (1 - lr_end / lr_start) * (1 - epoch / (num_epochs - 1))
+
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+
+
+    for e in range(1, num_epochs+1):
+        start_time = time.time()  # Start time
+        epoch_loss = model.train_model(train_dataloader, optimizer)
+        val_loss = model.validate_model(val_dataloader)
+
+        # Log the losses to TensorBoard
+        writer.add_scalar('Loss/Train', epoch_loss, e)
+        writer.add_scalar('Loss/Validation', val_loss, e)
+        writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], e)
+
+        scheduler.step()
+
+        end_time = time.time()  # End time
+        epoch_duration = end_time - start_time
+        print(f"Epoch {e}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}. Duration: {epoch_duration:.2f} seconds")
 
     torch.save(model.state_dict(), weights_file_path)
     print(f"Model saved to {weights_file_path}")
 
-    # Save the final angles to a file
-    model.eval()
-    all_outputs = []
-    all_indices = []
-    all_tracks = []
-
-    print(f"Model loaded. Predicting on {len(dataset)} images.")
-    with torch.no_grad():
-        for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting", unit="batch"):
-            images = images.to(device)
-            outputs = model(images)
-            all_outputs.append(outputs)
-            all_indices.append(idxs)
-            all_tracks.append(tracks)
-
-    all_outputs = torch.cat(all_outputs, dim=0).cpu()
-    all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
-    all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
-    all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
+    all_outputs, all_indices, all_tracks = model.predict(val_dataloader)
+    all_filenames = [str(val_dataset.get_image_path(idx).stem) for idx in all_indices]
 
     print(f"Predictions complete. Saving to {outfile_path}")
 
-    # Create a DataFrame
     data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks}
     other_df = pd.DataFrame(data)
 
     model.write_outputs(all_outputs, other_df, outfile_path)
     print(f"Final angles saved to {outfile_path}")
+
+    # Close the TensorBoard writer
+    writer.close()
 
 if __name__ == "__main__":
     main()
