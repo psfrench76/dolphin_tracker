@@ -337,14 +337,18 @@ class DolphinTracker:
 
         metrics = settings['tracking_metrics']
 
-        frames = sorted(
-            set(gt_df.index.get_level_values('FrameId')).intersection(set(pred_df.index.get_level_values('FrameId'))))
+        frames = sorted(set(gt_df.index.get_level_values('FrameId')))
 
         for frame in frames:
-            g = gt_df.loc[frame]
-            p = pred_df.loc[frame]
 
-            g.dropna(inplace=True)
+            g = gt_df.xs(frame, level='FrameId')
+            try:
+                p = pred_df.xs(frame, level='FrameId')
+            except KeyError:
+                p = pd.DataFrame(columns=pred_df.columns)
+                p = p.set_index(pd.MultiIndex.from_tuples([], names=pred_df.index.names))
+
+            g = g.dropna()
 
             gt_ids = g.index.get_level_values('Id').values
             pr_ids = p.index.get_level_values('Id').values
@@ -358,8 +362,7 @@ class DolphinTracker:
             for i, gt_box in enumerate(gt_boxes):
                 for j, tr_box in enumerate(tr_boxes):
                     iou = self._iou(gt_box, tr_box)
-                    # TODO: Is this the same as match_threshold? How does it relate to other thresholds? Should it be
-                    #  hp?
+                    # TODO: Experiment with changing this to self.iou or self.match_thresh?
                     if iou > 0.5:
                         distances[i, j] = 1 - iou
 
