@@ -212,6 +212,8 @@ def extract_frames(input_video, dataset_root_path):
 
 
 def _get_bboxes_from_txt(csv_file):
+    if csv_file.stat().st_size == 0:
+        return pd.DataFrame(columns=settings['bbox_file_columns'])
     bboxes = pd.read_csv(csv_file, header=None)
     if bboxes.shape[1] == len(settings['bbox_file_columns']):
         bboxes.columns = settings['bbox_file_columns']
@@ -267,8 +269,11 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
                     raise FileNotFoundError(f"Orientation file for {label_file.stem} not found.")
 
                 orientations_file = orientations_index[label_file.stem]
-                orientations = pd.read_csv(orientations_file, header=None, sep=' ', index_col=None)
-                orientations.columns = settings['orientation_file_columns']
+                if orientations_file.stat().st_size == 0:
+                    orientations = pd.DataFrame(columns=settings['orientation_file_columns'])
+                else:
+                    orientations = pd.read_csv(orientations_file, header=None, sep=' ', index_col=None)
+                    orientations.columns = settings['orientation_file_columns']
                 orientations['angle'] = np.arctan2(orientations['y'], orientations['x'])
                 orientations['angle'] = np.rad2deg(orientations['angle'])
                 bboxes = bboxes.merge(orientations[['label_index', 'angle']], on='label_index', how='left')
