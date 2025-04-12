@@ -73,7 +73,6 @@ track_colors:
   - [128, 128, 0]
   - [128, 0, 0]
   - [0, 128, 0]
-  - [0, 128, 128]
 
 # Dataset conversion settings (the class names, coming out of labelme, that have been observed as valid dolphins)
 dolphin_classes:
