@@ -42,7 +42,6 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
         return None
 
 
-
 class DolphinTracker:
 
     def __init__(self, model_path, output_dir_path, tracker_path, botsort, nopersist):
@@ -119,9 +118,8 @@ class DolphinTracker:
             metrics = self._compute_metrics(gt_df, pred_df)
             return metrics
         else:
-            print(
-                f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics "
-                f"calculations.")
+            print(f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics "
+                  f"calculations.")
 
     def _add_custom_researcher_columns(self, researcher_df):
         # Calculate the count of individuals in the frame
@@ -538,25 +536,17 @@ def main():
     parser.add_argument('--nopersist', action='store_true', help="Disable persistence in tracking.")
     parser.add_argument('--srt', help="Path to an SRT file corresponding to the video input.")
     parser.add_argument('--drone', help="Drone profile for GSD calculation.")
-    parser.add_argument('--altitude', type=float, help="Manual altitude in meters for GSD calculation. Overrides SRT altitude if present.")
+    parser.add_argument('--altitude', type=float,
+                        help="Manual altitude in meters for GSD calculation. Overrides SRT altitude if present.")
     parser.add_argument('--calibration', type=float, help="Manual calibration factor for GSD calculation.")
     parser.add_argument('--skip_evaluation', action='store_true', help="Skip evaluation.")
 
     args = parser.parse_args()
 
-    results = run_tracking_and_evaluation(
-        dataset_path=args.dataset,
-        model_path=args.model,
-        output_dir_path=args.output,
-        tracker_path=args.tracker,
-        botsort=args.botsort,
-        nopersist=args.nopersist,
-        srt_path=args.srt,
-        drone_profile=args.drone,
-        manual_altitude=args.altitude,
-        calibration=args.calibration,
-        evaluate=not args.skip_evaluation
-    )
+    results = run_tracking_and_evaluation(dataset_path=args.dataset, model_path=args.model, output_dir_path=args.output,
+        tracker_path=args.tracker, botsort=args.botsort, nopersist=args.nopersist, srt_path=args.srt,
+        drone_profile=args.drone, manual_altitude=args.altitude, calibration=args.calibration,
+        evaluate=not args.skip_evaluation)
 
 
 if __name__ == '__main__':
