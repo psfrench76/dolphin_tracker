@@ -42,11 +42,11 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     if not bbox_path:
         all_bboxes = _get_bboxes_from_dataset_root(dataset_root_path)
         output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
-        if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
+        if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
             oriented_bbox = True
     elif bbox_path.suffix == '.txt':
         all_bboxes = _get_bboxes_from_txt(bbox_path)
-        if all_bboxes.shape[1] == 10 or all_bboxes.shape[1] == 13:
+        if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
             oriented_bbox = True
         all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes)
         output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
@@ -90,20 +90,12 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
 
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames", unit="frame"):
-        match = re.search(settings['frame_number_regex'], image_file.name)
-        if match:
-            frame_number = int(match.group(1))
-        else:
-            print(f"Could not parse frame number from file: {image_file}")
-            continue
 
         # Get frame and resize
         frame = cv2.imread(str(image_file))
         frame = cv2.resize(frame, (new_width, new_height))
 
-        # TODO: Technically frame numbers are not guaranteed to be unique. Could use images_index or some other mapping
-        # Filter bounding boxes for the current frame
-        frame_bboxes = all_bboxes[all_bboxes['frame'] == frame_number]
+        frame_bboxes = all_bboxes[all_bboxes['file_stem'] == image_file.stem]
 
         # Draw bounding boxes and labels
         for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
@@ -113,7 +105,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
             if oriented_bbox:
                 """
                 Note: Oriented bounding box features are incomplete. See detailed comments in src/track.py and
-                src/utils/inc/data_conversion.py for more information.
+                src/utils/inc/data_conversion.py for more information. It's likely that some debugging will be needed
+                as newer features haven't been tested against the deprecated OBB code.
                 """
                 # Get oriented bounding box information from row
                 bbox = _get_obb_bbox_from_points(row['x1'], row['y1'], row['x2'], row['y2'], row['x3'], row['y3'],
@@ -215,6 +208,7 @@ def _get_bboxes_from_txt(csv_file):
     if csv_file.stat().st_size == 0:
         return pd.DataFrame(columns=settings['bbox_file_columns'])
     bboxes = pd.read_csv(csv_file, header=None)
+
     if bboxes.shape[1] == len(settings['bbox_file_columns']):
         bboxes.columns = settings['bbox_file_columns']
     elif bboxes.shape[1] == len(settings['obb_file_columns']):
@@ -223,6 +217,14 @@ def _get_bboxes_from_txt(csv_file):
         raise ValueError(
             f"Bounding box file {csv_file} does not have the correct number of columns. Found {bboxes.shape[1]}, "
             f"expected {len(settings['bbox_file_columns'])} or {len(settings['obb_file_columns'])}.")
+
+    images_index_filename = csv_file.parent / csv_file.name.replace(settings['results_file_suffix'], settings['images_index_suffix'])
+    images_index = pd.read_csv(images_index_filename, header=None)
+    images_index.columns = ['file_stem']
+
+    images_index['file_stem'] = [Path(f).stem for f in images_index['file_stem']]
+
+    bboxes = pd.concat([bboxes, images_index], axis=1)
     return bboxes
 
 
@@ -262,6 +264,7 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
 
             bboxes = bboxes.reset_index().rename(columns={'index': 'label_index'})
             bboxes.insert(0, 'frame', frame_number)
+            bboxes.insert(0, 'file_stem', label_file.stem)
             bboxes['id'] = tracks
 
             if get_orientations:
