@@ -34,7 +34,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
 
     tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
     results = tracker.track_from_images(image_dir_path)
-    tracker._save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude, calibration)
+    tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude, calibration)
     if evaluate:
         metrics = tracker.evaluate(label_dir_path)
         return metrics
@@ -120,6 +120,129 @@ class DolphinTracker:
         else:
             print(f"No ground truth label directory found; looked for {label_dir_path}. Not running metrics "
                   f"calculations.")
+
+    def save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None, manual_altitude=None,
+                             calibration=None):
+        files = list(image_dir_path.glob('*.jpg'))
+        files.sort()
+        pattern = r"(\d+)(?=[._](jpg))"
+
+        first_image = cv2.imread(files[0])
+        if first_image is None:
+            raise ValueError(f"Could not read image file {files[0]}")
+
+        img_height, img_width = first_image.shape[:2]
+        self.last_img_height = img_height
+
+        camera_df = self._load_srt_altitudes(srt_path) if srt_path else None
+
+        drone_profile = drone_profile or settings['default_drone_profile']
+        if manual_altitude:
+            if camera_df is None:
+                camera_df = pd.DataFrame(index=range(len(files)))
+            self._load_manual_altitudes(camera_df, float(manual_altitude))
+
+        if camera_df is not None:
+            self._calculate_gsd(camera_df, drone_profile, calibration)
+
+        data = []
+        researcher_data = []
+        image_files_index = []
+
+        for i, result in enumerate(results):
+            match = re.search(pattern, str(files[i]))
+            frame_id = match.group(1)
+            if camera_df is not None:
+                if i < len(camera_df):
+                    camera_row = camera_df.iloc[i]
+                else:
+                    print(f"Warning: Ran out of rows in SRT file at frame index {i + 1} (frame ID {frame_id})."
+                          f"Will use altitude and focal length from the last available row for the remaining frames.")
+
+            if result.obb:
+                for xywhr, xyxyxyxy in zip(result.obb.xywhr, result.obb.xyxyxyxy):
+                    """ Explanation for posterity
+
+                    This is a feature to work with oriented bounding boxes (OBB) in YOLO format. The goal was to use
+                    this format to reflect dolphin orientation, which is a useful statistic for researchers. However,
+                    the bounding boxes only record orientation in the range [0, 180) degrees, which is not sufficient
+                    for orientation. I am preserving the code in the feature set for posterity, but it is not fully
+                    functional and will require further development to be useful. Below are some notes on the work
+                    remaining, but it should not be considered exhaustive. Intrepid travellers, beware.
+
+                    - Track IDs aren't available yet -- need get them
+                    - Right now this always sets the orientation to the bottom-rightest side. YOLO-OBB does some weird
+                        things with the rotation (see https://docs.ultralytics.com/datasets/obb/#yolo-obb-format).
+                    - Researcher data isn't built out yet.
+                    - Evaluation against ground truth isn't built out yet.
+                    """
+                    self.using_obb = True
+                    center_x_px, center_y_px, width_px, height_px, rotation = torch.flatten(xywhr).tolist()
+                    x1, y1, x2, y2, x3, y3, x4, y4 = torch.flatten(xyxyxyxy).tolist()
+                    x1, y1, x2, y2, x3, y3, x4, y4 = rotate_points(x1, y1, x2, y2, x3, y3, x4, y4, rotation)
+
+                    data.append(
+                        [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
+                         y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
+                    image_files_index.append(str(files[i]))
+                    researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
+            else:
+                for box in result.boxes:
+                    if box.id:
+                        bbox = box.xyxyn[0].tolist()
+                        track_id = int(box.id.item())
+                        conf = box.conf.item()
+                        point_a_x, point_a_y, point_b_x, point_b_y = bbox
+                        width = point_b_x - point_a_x
+                        height = point_b_y - point_a_y
+                        center_x = (point_a_x + point_b_x) / 2
+                        center_y = (point_a_y + point_b_y) / 2
+                        data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
+                        image_files_index.append(str(files[i]))
+
+                        point_a_x_px = point_a_x * img_width
+                        point_a_y_px = point_a_y * img_height
+                        point_b_x_px = point_b_x * img_width
+                        point_b_y_px = point_b_y * img_height
+                        center_x_px = center_x * img_width
+                        center_y_px = center_y * img_height
+                        width_px = width * img_width
+                        height_px = height * img_height
+                        researcher_data.append(
+                            [frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px, width_px,
+                             height_px, center_x_px, center_y_px])
+                        if camera_df is not None and camera_row is not None:
+                            gsd_mpx = camera_row['GSD_cmpx'] / 100
+                            researcher_data[-1].extend(
+                                [point_a_x_px * gsd_mpx, point_a_y_px * gsd_mpx, point_b_x_px * gsd_mpx,
+                                 point_b_y_px * gsd_mpx, width_px * gsd_mpx, height_px * gsd_mpx, center_x_px * gsd_mpx,
+                                 center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]])
+        if self.using_obb:
+            df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
+                          'Unused3']
+            researcher_columns = ['FrameID', 'ObjectID', 'CenterX_px', 'CenterY_px', 'Width_px', 'Height_px',
+                                  'Rotation']
+        else:
+            df_columns = ['FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2',
+                          'Confidence']
+            researcher_columns = ['FrameID', 'ObjectID', 'Point1X_px', 'Point1Y_px', 'Point2X_px', 'Point2Y_px',
+                                  'Width_px', 'Height_px', 'CenterX_px', 'CenterY_px']
+        df = pd.DataFrame(data, columns=df_columns)
+        df.to_csv(self.results_file_path, index=False, header=False)
+        print(f"Wrote raw results to {self.results_file_path}")
+
+        images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
+        images_df.to_csv(self.images_index_file_path, index=False, header=False)
+
+        if researcher_data:
+            if camera_df is not None:
+                researcher_columns.extend(
+                    ['Point1X_m', 'Point1Y_m', 'Point2X_m', 'Point2Y_m', 'Width_m', 'Height_m', 'CenterX_m',
+                     'CenterY_m', 'Altitude_m', 'GSD_cmpx'])
+            researcher_df = pd.DataFrame(researcher_data, columns=researcher_columns)
+            self._add_custom_researcher_columns(researcher_df)
+            researcher_df.to_csv(self.researcher_output_path, index=False)
+            print(f"Wrote researcher output data to {self.researcher_output_path}")
 
     def _add_custom_researcher_columns(self, researcher_df):
         # Calculate the count of individuals in the frame
@@ -241,129 +364,6 @@ class DolphinTracker:
         if zero_ids_warning:
             print("Warning: Found 0 or None IDs in ground truth labels. Assigned new IDs. If this is unexpected, "
                   "check that the track files are correct and present.")
-
-    def _save_tracker_results(self, image_dir_path, results, srt_path=None, drone_profile=None, manual_altitude=None,
-                              calibration=None):
-        files = list(image_dir_path.glob('*.jpg'))
-        files.sort()
-        pattern = r"(\d+)(?=[._](jpg))"
-
-        first_image = cv2.imread(files[0])
-        if first_image is None:
-            raise ValueError(f"Could not read image file {files[0]}")
-
-        img_height, img_width = first_image.shape[:2]
-        self.last_img_height = img_height
-
-        camera_df = self._load_srt_altitudes(srt_path) if srt_path else None
-
-        drone_profile = drone_profile or settings['default_drone_profile']
-        if manual_altitude:
-            if camera_df is None:
-                camera_df = pd.DataFrame(index=range(len(files)))
-            self._load_manual_altitudes(camera_df, float(manual_altitude))
-
-        if camera_df is not None:
-            self._calculate_gsd(camera_df, drone_profile, calibration)
-
-        data = []
-        researcher_data = []
-        image_files_index = []
-
-        for i, result in enumerate(results):
-            match = re.search(pattern, str(files[i]))
-            frame_id = match.group(1)
-            if camera_df is not None:
-                if i < len(camera_df):
-                    camera_row = camera_df.iloc[i]
-                else:
-                    print(f"Warning: Ran out of rows in SRT file at frame index {i + 1} (frame ID {frame_id})."
-                          f"Will use altitude and focal length from the last available row for the remaining frames.")
-
-            if result.obb:
-                for xywhr, xyxyxyxy in zip(result.obb.xywhr, result.obb.xyxyxyxy):
-                    """ Explanation for posterity
-
-                    This is a feature to work with oriented bounding boxes (OBB) in YOLO format. The goal was to use
-                    this format to reflect dolphin orientation, which is a useful statistic for researchers. However,
-                    the bounding boxes only record orientation in the range [0, 180) degrees, which is not sufficient
-                    for orientation. I am preserving the code in the feature set for posterity, but it is not fully
-                    functional and will require further development to be useful. Below are some notes on the work
-                    remaining, but it should not be considered exhaustive. Intrepid travellers, beware.
-
-                    - Track IDs aren't available yet -- need get them
-                    - Right now this always sets the orientation to the bottom-rightest side. YOLO-OBB does some weird
-                        things with the rotation (see https://docs.ultralytics.com/datasets/obb/#yolo-obb-format).
-                    - Researcher data isn't built out yet.
-                    - Evaluation against ground truth isn't built out yet.
-                    """
-                    self.using_obb = True
-                    center_x_px, center_y_px, width_px, height_px, rotation = torch.flatten(xywhr).tolist()
-                    x1, y1, x2, y2, x3, y3, x4, y4 = torch.flatten(xyxyxyxy).tolist()
-                    x1, y1, x2, y2, x3, y3, x4, y4 = rotate_points(x1, y1, x2, y2, x3, y3, x4, y4, rotation)
-
-                    data.append(
-                        [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
-                         y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
-                    image_files_index.append(str(files[i]))
-                    researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
-            else:
-                for box in result.boxes:
-                    if box.id:
-                        bbox = box.xyxyn[0].tolist()
-                        track_id = int(box.id.item())
-                        conf = box.conf.item()
-                        point_a_x, point_a_y, point_b_x, point_b_y = bbox
-                        width = point_b_x - point_a_x
-                        height = point_b_y - point_a_y
-                        center_x = (point_a_x + point_b_x) / 2
-                        center_y = (point_a_y + point_b_y) / 2
-                        data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
-                        image_files_index.append(str(files[i]))
-
-                        point_a_x_px = point_a_x * img_width
-                        point_a_y_px = point_a_y * img_height
-                        point_b_x_px = point_b_x * img_width
-                        point_b_y_px = point_b_y * img_height
-                        center_x_px = center_x * img_width
-                        center_y_px = center_y * img_height
-                        width_px = width * img_width
-                        height_px = height * img_height
-                        researcher_data.append(
-                            [frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px, width_px,
-                             height_px, center_x_px, center_y_px])
-                        if camera_df is not None and camera_row is not None:
-                            gsd_mpx = camera_row['GSD_cmpx'] / 100
-                            researcher_data[-1].extend(
-                                [point_a_x_px * gsd_mpx, point_a_y_px * gsd_mpx, point_b_x_px * gsd_mpx,
-                                 point_b_y_px * gsd_mpx, width_px * gsd_mpx, height_px * gsd_mpx, center_x_px * gsd_mpx,
-                                 center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]])
-        if self.using_obb:
-            df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
-                          'Unused3']
-            researcher_columns = ['FrameID', 'ObjectID', 'CenterX_px', 'CenterY_px', 'Width_px', 'Height_px',
-                                  'Rotation']
-        else:
-            df_columns = ['FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2',
-                          'Confidence']
-            researcher_columns = ['FrameID', 'ObjectID', 'Point1X_px', 'Point1Y_px', 'Point2X_px', 'Point2Y_px',
-                                  'Width_px', 'Height_px', 'CenterX_px', 'CenterY_px']
-        df = pd.DataFrame(data, columns=df_columns)
-        df.to_csv(self.results_file_path, index=False, header=False)
-        print(f"Wrote raw results to {self.results_file_path}")
-
-        images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
-        images_df.to_csv(self.images_index_file_path, index=False, header=False)
-
-        if researcher_data:
-            if camera_df is not None:
-                researcher_columns.extend(
-                    ['Point1X_m', 'Point1Y_m', 'Point2X_m', 'Point2Y_m', 'Width_m', 'Height_m', 'CenterX_m',
-                     'CenterY_m', 'Altitude_m', 'GSD_cmpx'])
-            researcher_df = pd.DataFrame(researcher_data, columns=researcher_columns)
-            self._add_custom_researcher_columns(researcher_df)
-            researcher_df.to_csv(self.researcher_output_path, index=False)
-            print(f"Wrote researcher output data to {self.researcher_output_path}")
 
     def _iou(self, box1, box2):
         poly1 = shape_box(*box1)
