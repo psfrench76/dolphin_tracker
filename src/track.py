@@ -79,6 +79,7 @@ class DolphinTracker:
         self.metrics_events_path = self.output_dir_path / f'{self.run_name}_{settings["metrics_events_suffix"]}'
         self.researcher_output_path = self.output_dir_path / f'{self.run_name}_{settings["researcher_output_suffix"]}'
         self.images_index_file_path = self.output_dir_path / f'{self.run_name}_{settings["images_index_suffix"]}'
+        self.gt_images_index_file_path = self.output_dir_path / f'{self.run_name}_{settings["gt_images_index_suffix"]}'
 
         with open(self.tracker_path, 'r') as file:
             tracker_settings = yaml.safe_load(file)
@@ -266,6 +267,7 @@ class DolphinTracker:
         files.sort()
 
         data = []
+        images_index = []
 
         # Define the tracks directory path
         tracks_dir_path = label_dir_path.parent / settings['tracks_dir']
@@ -293,6 +295,9 @@ class DolphinTracker:
                 content = f.read()
                 next_id = 1
                 empty_frame = True
+
+                file_name = label_path.name
+
                 for i, line in enumerate(content.split("\n")):
                     if line.strip():
                         line_data = line.split(" ")
@@ -307,10 +312,13 @@ class DolphinTracker:
                             line_data[0] = str(next_id)
                             next_id += 1
                             zero_ids_warning = True
+
                         data.append([frame_id] + line_data)
+                        images_index.append(file_name)
                         empty_frame = False
                 if empty_frame:
                     data.append([frame_id, None, None, None, None, None])
+                    images_index.append(file_name)
 
         # Convert list to DataFrame
         gt_df = pd.DataFrame(data, columns=['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max'])
@@ -321,6 +329,10 @@ class DolphinTracker:
         gt_df['mot15col2'] = -1
         gt_df['mot15col3'] = 1
         gt_df.to_csv(self.gt_file_path, index=False, header=False)
+
+        images_df = pd.DataFrame(images_index, columns=['file_stem'])
+        images_df.to_csv(self.gt_images_index_file_path, index=False, header=False)
+
         if zero_ids_warning:
             print("Warning: Found 0 or None IDs in ground truth labels. Assigned new IDs. If this is unexpected, "
                   "check that the track files are correct and present.")
@@ -337,21 +349,17 @@ class DolphinTracker:
 
         metrics = settings['tracking_metrics']
 
-        frames = sorted(set(gt_df.index.get_level_values('FrameId')))
+        frames = sorted(gt_df['file_stem'].unique())
 
         for frame in frames:
 
-            g = gt_df.xs(frame, level='FrameId')
-            try:
-                p = pred_df.xs(frame, level='FrameId')
-            except KeyError:
-                p = pd.DataFrame(columns=pred_df.columns)
-                p = p.set_index(pd.MultiIndex.from_tuples([], names=pred_df.index.names))
+            g = gt_df[gt_df['file_stem'] == frame]
+            p = pred_df[pred_df['file_stem'] == frame]
 
             g = g.dropna()
 
-            gt_ids = g.index.get_level_values('Id').values
-            pr_ids = p.index.get_level_values('Id').values
+            gt_ids = g['Id'].values
+            pr_ids = p['Id'].values
 
             gt_boxes = [(row['X'], row['Y'], row['X'] + row['Width'], row['Y'] + row['Height']) for index, row in
                         g.iterrows()]
@@ -382,10 +390,25 @@ class DolphinTracker:
 
     def evaluate(self, label_dir_path):
         if label_dir_path.is_dir():
-            self.save_ground_truth(label_dir_path)
 
+            self.save_ground_truth(label_dir_path)
             gt_df = mm.io.loadtxt(self.gt_file_path)
             pred_df = mm.io.loadtxt(self.results_file_path)
+
+            gt_df.reset_index(inplace=True)
+            pred_df.reset_index(inplace=True)
+
+            images_index_df = pd.read_csv(self.images_index_file_path, header=None)
+            gt_images_index_df = pd.read_csv(self.gt_images_index_file_path, header=None)
+
+            images_index_df.columns = ['file_stem']
+            gt_images_index_df.columns = ['file_stem']
+
+            images_index_df['file_stem'] = [Path(f).stem for f in images_index_df['file_stem']]
+            gt_images_index_df['file_stem'] = [Path(f).stem for f in gt_images_index_df['file_stem']]
+
+            pred_df = pd.concat([images_index_df, pred_df], axis=1)
+            gt_df = pd.concat([gt_images_index_df, gt_df], axis=1)
 
             metrics = self.compute_metrics(gt_df, pred_df)
             return metrics
