@@ -1,4 +1,6 @@
 import motmetrics as mm
+import pandas as pd
+from pathlib import Path
 from .settings import settings
 
 
@@ -40,3 +42,13 @@ class TrackingMetrics:
 
     def write_events(self, filename):
         self.acc[0].mot_events.to_csv(filename)
+
+
+class ResearcherData:
+
+    def __init__(self, output_filepath):
+        self.output_filepath = Path(output_filepath)
+        self.data = pd.DataFrame()
+
+    def to_csv(self):
+        self.data.to_csv(self.output_filepath, index=False)

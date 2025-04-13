@@ -13,11 +13,11 @@ import argparse
 
 if __package__ is None or __package__ == '':
     from utils.inc.settings import settings, project_path
-    from utils.inc.tracking_metrics import TrackingMetrics
+    from utils.inc.reporting import TrackingMetrics
     from utils.inc.oriented_bounding_boxes import rotate_points
 else:
     from .utils.inc.settings import settings, project_path
-    from .utils.inc.tracking_metrics import TrackingMetrics
+    from .utils.inc.reporting import TrackingMetrics
     from .utils.inc.oriented_bounding_boxes import rotate_points
 
 
