@@ -220,21 +220,20 @@ class DolphinTracker:
         print(f"Wrote raw results to {self.results_file_path}")
 
     def _save_ground_truth(self, label_dir_path):
+        pattern = r"(\d+)(?=[._](txt|jpg\.rf))"  # Roboflow files have _jpg. followed by a hash then .txt; this
+        # gets those
         files = list(label_dir_path.glob('*.txt'))
         files.sort()
 
-        data = []
+        ground_truth_data_accumulator = DataAccumulator(bbox_type='xyxy', units='px')
         images_index = []
 
         # Define the tracks directory path
         tracks_dir_path = label_dir_path.parent / settings['tracks_dir']
-
         zero_ids_warning = False
 
         # Read and process each file
-        for label_path in files:
-            pattern = r"(\d+)(?=[._](txt|jpg\.rf))"  # Roboflow files have _jpg. followed by a hash then .txt; this
-            # gets those
+        for frame_index, label_path in enumerate(files):
             match = re.search(pattern, str(label_path))
             if not match:
                 raise ValueError(f"Could not process filename {label_path}")
@@ -249,46 +248,39 @@ class DolphinTracker:
                     track_ids = [line.strip() for line in track_file.readlines()]
 
             with open(label_path, 'r') as f:
-                content = f.read()
                 next_id = 1
                 empty_frame = True
 
                 file_name = label_path.name
 
-                for i, line in enumerate(content.split("\n")):
+                for i, line in enumerate(f.readlines()):
                     if line.strip():
                         line_data = line.split(" ")
+                        bbox = line_data[1:5]
                         # Use track ID from track file if available, otherwise use next_id if ID is 0 or None
                         if track_ids and i < len(track_ids):
-                            line_data[0] = track_ids[i]
-                        # The logic below is only preserved as a vestige for use with older dataset iterations for
-                        # the sake
-                        # of comparison. It should not be necessary for datasets created after March 3, 2025. If it is,
-                        # you need to reconvert the dataset.
+                            track_id = int(track_ids[i])
+                        # The logic below is only preserved as a vestige for use with older dataset iterations for the sake of comparison. It should not be necessary for datasets created after March 3, 2025. If it is, you need to reconvert the dataset.
                         elif line_data[0] == '0' or line_data[0] == 'None':
-                            line_data[0] = str(next_id)
+                            track_id = next_id
                             next_id += 1
                             zero_ids_warning = True
+                        else:
+                            track_id = int(line_data[0])
 
-                        data.append([frame_id] + line_data)
+                        ground_truth_data_accumulator.add_object(frame_index, frame_id, track_id, bbox, conf=1)
                         images_index.append(file_name)
                         empty_frame = False
+
                 if empty_frame:
-                    data.append([frame_id, None, None, None, None, None])
+                    ground_truth_data_accumulator.add_object(frame_index, frame_id, -1, ['nan', 'nan', 'nan', 'nan'])
                     images_index.append(file_name)
-
-        # Convert list to DataFrame
-        gt_df = pd.DataFrame(data, columns=['frame', 'id', 'x_min', 'y_min', 'x_max', 'y_max'])
-        gt_df = gt_df.astype(
-            {'frame': int, 'id': 'Int64', 'x_min': float, 'y_min': float, 'x_max': float, 'y_max': float})
-
-        gt_df['mot15col1'] = -1
-        gt_df['mot15col2'] = -1
-        gt_df['mot15col3'] = 1
-        gt_df.to_csv(self.gt_file_path, index=False, header=False)
 
         images_df = pd.DataFrame(images_index, columns=['file_stem'])
         images_df.to_csv(self.gt_images_index_file_path, index=False, header=False)
+
+        ground_truth_data_accumulator.finished_adding_objects()
+        ground_truth_data_accumulator.to_csv(self.gt_file_path, mot15=True)
 
         if zero_ids_warning:
             print("Warning: Found 0 or None IDs in ground truth labels. Assigned new IDs. If this is unexpected, "
@@ -312,8 +304,6 @@ class DolphinTracker:
 
             g = gt_df[gt_df['file_stem'] == file_stem]
             p = pred_df[pred_df['file_stem'] == file_stem]
-            #
-            # frame_id = g['FrameId'].values[0]
 
             g = g.dropna()
 

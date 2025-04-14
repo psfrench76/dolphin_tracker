@@ -53,15 +53,12 @@ class DataAccumulator:
                   'xywh': ['CenterX', 'CenterY', 'Width', 'Height'], }
     BBOX_UNITS = ['px', 'pct', 'm']
 
-    def __init__(self, bbox_type, width, height, units):
+    def __init__(self, bbox_type, units, width=None, height=None):
         self.bbox_type = None
         self.data_columns = None
         self.units = None
         self.df = None
         self.finished = False
-
-        if width <= 0 or height <= 0:
-            raise ValueError(f"Invalid image dimensions: {width}x{height}. Must be positive.")
 
         self.img_width = width
         self.img_height = height
@@ -72,6 +69,8 @@ class DataAccumulator:
         self.set_units(units)
 
     def to_csv(self, filepath, ignore_columns=None, mot15=False, header=True, only_columns=None):
+        if not self.finished:
+            raise ValueError("Cannot write to csv before calling finished_adding_objects().")
         df = self.df.copy()
         if mot15:
             header=False
@@ -122,7 +121,7 @@ class DataAccumulator:
             raise ValueError("Cannot add objects after calling finished_adding_objects().")
 
         self.data.append({'FrameIndex': frame_index, 'FrameID': frame_id, 'ObjectID': object_id,
-            **{col: bbox[i] for i, col in enumerate(self.data_columns)}, 'Confidence': conf})
+            **{col: float(bbox[i]) for i, col in enumerate(self.data_columns)}, 'Confidence': conf})
 
     def finished_adding_objects(self):
         self.df = self._convert_to_df()
@@ -136,6 +135,8 @@ class DataAccumulator:
             raise ValueError("Cannot add conversion columns before calling finished_adding_objects().")
         if units not in self.BBOX_UNITS:
             raise ValueError(f"Invalid units: {units}. Must be one of {self.BBOX_UNITS}.")
+        if self.img_width is None or self.img_height is None:
+            raise ValueError("Image dimensions not set. Cannot convert units.")
         if self.units == 'pct' and units == 'px':
             self._convert_data_columns('pct', 'px', drop_original)
         elif self.units == 'px' and units == 'pct':
@@ -321,6 +322,9 @@ class DataAccumulator:
         for col in self.data_columns:
             rename_cols[col] = f"{col}_{self.units}"
             df[col] = df[col].astype(float)
+        df['FrameIndex'] = df['FrameIndex'].astype(int)
+        df['FrameID'] = df['FrameID'].astype(int)
+        df['ObjectID'] = df['ObjectID'].astype('Int64')
         self.data_columns = [val for _, val in rename_cols.items()]
         df.rename(columns=rename_cols, inplace=True)
         return df
