@@ -374,9 +374,9 @@ def main():
     args = parser.parse_args()
 
     results = run_tracking_and_evaluation(dataset_path=args.dataset, model_path=args.model, output_dir_path=args.output,
-        tracker_path=args.tracker, botsort=args.botsort, nopersist=args.nopersist, srt_path=args.srt,
-        drone_profile=args.drone, manual_altitude=args.altitude, calibration=args.calibration,
-        evaluate=not args.skip_evaluation)
+                                          tracker_path=args.tracker, botsort=args.botsort, nopersist=args.nopersist,
+                                          srt_path=args.srt, drone_profile=args.drone, manual_altitude=args.altitude,
+                                          calibration=args.calibration, evaluate=not args.skip_evaluation)
 
 
 if __name__ == '__main__':
