@@ -47,7 +47,8 @@ class TrackingMetrics:
 
 
 class DataAccumulator:
-    BBOX_TYPES = {'obb': ['CenterX', 'CenterY', 'Width', 'Height', 'Rotation'],
+    BBOX_TYPES = {'xywhr': ['CenterX', 'CenterY', 'Width', 'Height', 'Rotation'],
+                  'xyxyxyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y', 'Point3X', 'Point3Y', 'Point4X', 'Point4Y'],
                   'xyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y'],
                   'xywh': ['CenterX', 'CenterY', 'Width', 'Height'], }
     BBOX_UNITS = ['px', 'pct', 'm']
@@ -70,8 +71,24 @@ class DataAccumulator:
         self.set_bbox_type(bbox_type)
         self.set_units(units)
 
-    def to_csv(self, filepath):
-        self.df.to_csv(filepath, index=False)
+    def to_csv(self, filepath, ignore_columns=None, mot15=False, header=True, only_columns=None):
+        df = self.df.copy()
+        if mot15:
+            header=False
+            df['Unused1'] = -1
+            df['Unused2'] = -1
+            if 'Confidence' not in df.columns:
+                df['Confidence'] = -1
+
+            only_columns = ['FrameIndex', 'ObjectID'] + self.data_columns + ['Unused1', 'Unused2', 'Confidence']
+
+        if ignore_columns is not None:
+            df.drop(columns=ignore_columns, inplace=True)
+
+        if only_columns is not None:
+            df = df[only_columns]
+
+        df.to_csv(filepath, index=False, header=header)
 
     def set_bbox_type(self, bbox_type):
         if bbox_type not in self.BBOX_TYPES:
@@ -92,7 +109,7 @@ class DataAccumulator:
         else:
             self.units = units
 
-    def add_object(self, frame_index, frame_id, object_id, bbox):
+    def add_object(self, frame_index, frame_id, object_id, bbox, conf=-1):
         if len(bbox) != len(self.BBOX_TYPES[self.bbox_type]):
             raise ValueError(
                 f"Invalid bbox length: {len(bbox)}. Must be {len(self.BBOX_TYPES[self.bbox_type])} for bbox type "
@@ -105,7 +122,7 @@ class DataAccumulator:
             raise ValueError("Cannot add objects after calling finished_adding_objects().")
 
         self.data.append({'FrameIndex': frame_index, 'FrameID': frame_id, 'ObjectID': object_id,
-            **{col: bbox[i] for i, col in enumerate(self.data_columns)}})
+            **{col: bbox[i] for i, col in enumerate(self.data_columns)}, 'Confidence': conf})
 
     def finished_adding_objects(self):
         self.df = self._convert_to_df()
@@ -121,6 +138,8 @@ class DataAccumulator:
             raise ValueError(f"Invalid units: {units}. Must be one of {self.BBOX_UNITS}.")
         if self.units == 'pct' and units == 'px':
             self._convert_data_columns('pct', 'px', drop_original)
+        elif self.units == 'px' and units == 'pct':
+            self._convert_data_columns('px', 'pct', drop_original)
         elif units == 'm':
             self._convert_data_columns('px', 'm', drop_original)
         else:
@@ -320,6 +339,8 @@ class DataAccumulator:
                         self.df[new_col_name] = self._convert_values_pct_to_px(self.df[full_col_name], col_base_name)
                     elif from_units == 'px' and to_units == 'm':
                         self.df[new_col_name] = self._convert_values_px_to_m(self.df[full_col_name], col_base_name)
+                    elif from_units == 'px' and to_units == 'pct':
+                        self.df[new_col_name] = self._convert_values_px_to_pct(self.df[full_col_name], col_base_name)
                     else:
                         raise NotImplementedError(f"Conversion from {from_units} to {to_units} not implemented.")
 
@@ -386,6 +407,18 @@ class DataAccumulator:
         else:
             raise ValueError(f"Invalid column name: {col_name}. Must end with X or Y if not Width or Height.")
 
+    def _convert_values_px_to_pct(self, value, col_name):
+        if col_name == 'Width':
+            return value / self.img_width
+        elif col_name == 'Height':
+            return value / self.img_height
+        elif col_name.endswith('X'):
+            return value / self.img_width
+        elif col_name.endswith('Y'):
+            return value / self.img_height
+        else:
+            raise ValueError(f"Invalid column name: {col_name}. Must end with X or Y if not Width or Height.")
+
     def _convert_values_px_to_m(self, value, col_name):
         ground_sampling_distance_column = 'GSD_cmpx'
         if ground_sampling_distance_column in self.df.columns:
@@ -403,4 +436,5 @@ class DataAccumulator:
     def _all_columns(self):
         columns = ['FrameIndex', 'FrameID', 'ObjectID']
         columns.extend(self.data_columns)
+        columns.append('Confidence')
         return columns

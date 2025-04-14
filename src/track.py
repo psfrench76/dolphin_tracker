@@ -13,7 +13,7 @@ import argparse
 if __package__ is None or __package__ == '':
     from utils.inc.settings import settings, project_path
     from utils.inc.reporting import TrackingMetrics
-    from utils.inc.reporting import ResearcherData
+    from utils.inc.reporting import DataAccumulator
     from utils.inc.oriented_bounding_boxes import rotate_points
 else:
     from .utils.inc.settings import settings, project_path
@@ -53,7 +53,6 @@ class DolphinTracker:
 
         self.botsort = botsort
         self.nopersist = nopersist
-        self.last_img_height = None
         self.using_obb = False
 
         if self.botsort:
@@ -133,11 +132,9 @@ class DolphinTracker:
             raise ValueError(f"Could not read image file {files[0]}")
 
         img_height, img_width = first_image.shape[:2]
-        self.last_img_height = img_height
-
         drone_profile = drone_profile or settings['default_drone_profile']
 
-        data = []
+        tracker_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         researcher_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         image_files_index = []
 
@@ -163,41 +160,44 @@ class DolphinTracker:
                     - Evaluation against ground truth isn't built out yet.
                     """
                     self.using_obb = True
-                    researcher_data_accumulator.set_bbox_type('obb')
+                    researcher_data_accumulator.set_bbox_type('xywhr')
                     researcher_data_accumulator.set_units('px')
 
-                    center_x_px, center_y_px, width_px, height_px, rotation = torch.flatten(xywhr).tolist()
+                    tracker_data_accumulator.set_bbox_type('xyxyxyxy')
+                    tracker_data_accumulator.set_units('px')
+
+                    _, _, _, _, rotation = torch.flatten(xywhr).tolist()
                     x1, y1, x2, y2, x3, y3, x4, y4 = torch.flatten(xyxyxyxy).tolist()
                     x1, y1, x2, y2, x3, y3, x4, y4 = rotate_points(x1, y1, x2, y2, x3, y3, x4, y4, rotation)
 
-                    data.append(
-                        [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
-                         y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
                     image_files_index.append(str(files[i]))
 
-                    bbox = [center_x_px, center_y_px, width_px, height_px, rotation]
-                    researcher_data_accumulator.add_object(i, frame_id, -1, bbox)
+                    bbox = [x1, y1, x2, y2, x3, y3, x4, y4]
+                    tracker_data_accumulator.add_object(i, frame_id, -1, bbox)
+
+                    researcher_bbox = torch.flatten(xywhr).tolist()
+                    researcher_data_accumulator.add_object(i, frame_id, -1, researcher_bbox)
             else:
                 for box in result.boxes:
                     if box.id:
-                        bbox = box.xyxyn[0].tolist()
+                        researcher_bbox = box.xyxyn[0].tolist()
                         track_id = int(box.id.item())
                         conf = box.conf.item()
-                        point_a_x, point_a_y, point_b_x, point_b_y = bbox
-                        width = point_b_x - point_a_x
-                        height = point_b_y - point_a_y
-                        center_x = (point_a_x + point_b_x) / 2
-                        center_y = (point_a_y + point_b_y) / 2
-                        data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
+
                         image_files_index.append(str(files[i]))
 
-                        researcher_data_accumulator.add_object(i, frame_id, track_id, bbox)
+                        tracker_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox, conf=conf)
+                        researcher_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox)
 
         researcher_data_accumulator.finished_adding_objects()
+        tracker_data_accumulator.finished_adding_objects()
 
         if not self.using_obb:
             researcher_data_accumulator.reformat_bbox('xywh', drop_original=True)
             researcher_data_accumulator.add_conversion_columns('px', drop_original=True)
+            tracker_data_accumulator.reformat_bbox('xywh', drop_original=True)
+        else:
+            tracker_data_accumulator.add_conversion_columns('pct', drop_original=True)
 
         if srt_path is not None or manual_altitude is not None:
             if srt_path is not None:
@@ -210,21 +210,14 @@ class DolphinTracker:
         researcher_data_accumulator.add_individual_count_column()
         researcher_data_accumulator.add_distances_columns()
 
-        if self.using_obb:
-            df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
-                          'Unused3']
-        else:
-            df_columns = ['FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2',
-                          'Confidence']
-        df = pd.DataFrame(data, columns=df_columns)
-        df.to_csv(self.results_file_path, index=False, header=False)
-        print(f"Wrote raw results to {self.results_file_path}")
-
         images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
         images_df.to_csv(self.images_index_file_path, index=False, header=False)
 
-        researcher_data_accumulator.to_csv(self.researcher_output_path)
+        researcher_data_accumulator.to_csv(self.researcher_output_path, ignore_columns=['Confidence'])
         print(f"Wrote researcher output data to {self.researcher_output_path}")
+
+        tracker_data_accumulator.to_csv(self.results_file_path, mot15=True)
+        print(f"Wrote raw results to {self.results_file_path}")
 
     def _save_ground_truth(self, label_dir_path):
         files = list(label_dir_path.glob('*.txt'))
