@@ -55,7 +55,7 @@ class DataAccumulator:
 
     def __init__(self, bbox_type, units, width=None, height=None):
         self.bbox_type = None
-        self.data_columns = None
+        self.position_columns = None
         self.units = None
         self.df = None
         self.finished = False
@@ -79,7 +79,7 @@ class DataAccumulator:
             if 'Confidence' not in df.columns:
                 df['Confidence'] = -1
 
-            only_columns = ['FrameIndex', 'ObjectID'] + self.data_columns + ['Unused1', 'Unused2', 'Confidence']
+            only_columns = ['FrameIndex', 'ObjectID'] + self.position_columns + ['Unused1', 'Unused2', 'Confidence']
 
         if ignore_columns is not None:
             df.drop(columns=ignore_columns, inplace=True)
@@ -96,7 +96,7 @@ class DataAccumulator:
             raise ValueError(f"Cannot change bbox_type from {self.bbox_type} to {bbox_type} after data has been added.")
         else:
             self.bbox_type = bbox_type
-            self.data_columns = self.BBOX_TYPES[self.bbox_type]
+            self.position_columns = self.BBOX_TYPES[self.bbox_type]
 
     def set_units(self, units):
         if units not in self.BBOX_UNITS:
@@ -113,15 +113,15 @@ class DataAccumulator:
             raise ValueError(
                 f"Invalid bbox length: {len(bbox)}. Must be {len(self.BBOX_TYPES[self.bbox_type])} for bbox type "
                 f"{self.bbox_type}.")
-        if len(self.data_columns) != len(self.BBOX_TYPES[self.bbox_type]):
+        if len(self.position_columns) != len(self.BBOX_TYPES[self.bbox_type]):
             raise ValueError(
-                f"Column count has changed to: {len(self.data_columns)}. Must be "
+                f"Column count has changed to: {len(self.position_columns)}. Must be "
                 f"{len(self.BBOX_TYPES[self.bbox_type])} for bbox type {self.bbox_type} while adding objects.")
         if self.finished:
             raise ValueError("Cannot add objects after calling finished_adding_objects().")
 
         self.data.append({'FrameIndex': frame_index, 'FrameID': frame_id, 'ObjectID': object_id,
-            **{col: float(bbox[i]) for i, col in enumerate(self.data_columns)}, 'Confidence': conf})
+                          **{col: float(bbox[i]) for i, col in enumerate(self.position_columns)}, 'Confidence': conf})
 
     def finished_adding_objects(self):
         self.df = self._convert_to_df()
@@ -313,24 +313,24 @@ class DataAccumulator:
                 self.df[f"Distances_{units}"] = distances
                 self.df[f"MaxDistance_{units}"] = self.df.groupby('FrameID')[f"Distances_{units}"].transform(
                     lambda x: max((max(d.values()) for d in x if d), default=0))
-                self.data_columns.append(f"Distances_{units}")
-                self.data_columns.append(f"MaxDistance_{units}")
+                self.position_columns.append(f"Distances_{units}")
+                self.position_columns.append(f"MaxDistance_{units}")
 
     def _convert_to_df(self):
         df = pd.DataFrame(self.data, columns=self._all_columns())
         rename_cols = {}
-        for col in self.data_columns:
+        for col in self.position_columns:
             rename_cols[col] = f"{col}_{self.units}"
             df[col] = df[col].astype(float)
         df['FrameIndex'] = df['FrameIndex'].astype(int)
         df['FrameID'] = df['FrameID'].astype(int)
         df['ObjectID'] = df['ObjectID'].astype('Int64')
-        self.data_columns = [val for _, val in rename_cols.items()]
+        self.position_columns = [val for _, val in rename_cols.items()]
         df.rename(columns=rename_cols, inplace=True)
         return df
 
     def _convert_data_columns(self, from_units, to_units, drop_original):
-        new_columns = self.data_columns.copy()
+        new_columns = self.position_columns.copy()
         converted_columns = []
 
         col_index = self._get_data_column_index()
@@ -356,13 +356,13 @@ class DataAccumulator:
             for col in converted_columns:
                 new_columns.remove(col)
 
-        self.data_columns = new_columns
+        self.position_columns = new_columns
 
     def _get_data_column_index(self):
         column_pattern = re.compile(r'(\S+)_([a-z]+)\s?')
         col_index = defaultdict(dict)
 
-        for full_col_name in self.data_columns:
+        for full_col_name in self.position_columns:
             match = column_pattern.match(full_col_name)
             if not match:
                 raise ValueError(f"Invalid column name: {full_col_name}. Must match pattern: {column_pattern.pattern}")
@@ -375,7 +375,7 @@ class DataAccumulator:
 
     def _reformat_bbox_columns(self, from_type, to_type, drop_original):
         bbox_col_index = self._get_data_column_index()
-        new_columns = self.data_columns.copy()
+        new_columns = self.position_columns.copy()
         converted_columns = []
         for units, columns in bbox_col_index.items():
             for col_base_name, full_col_name in columns.items():
@@ -397,7 +397,7 @@ class DataAccumulator:
             for col in converted_columns:
                 new_columns.remove(col)
 
-        self.data_columns = new_columns
+        self.position_columns = new_columns
 
     def _convert_values_pct_to_px(self, value, col_name):
         if col_name == 'Width':
@@ -439,6 +439,6 @@ class DataAccumulator:
 
     def _all_columns(self):
         columns = ['FrameIndex', 'FrameID', 'ObjectID']
-        columns.extend(self.data_columns)
+        columns.extend(self.position_columns)
         columns.append('Confidence')
         return columns
