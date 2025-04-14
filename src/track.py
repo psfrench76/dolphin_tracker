@@ -14,10 +14,12 @@ import argparse
 if __package__ is None or __package__ == '':
     from utils.inc.settings import settings, project_path
     from utils.inc.reporting import TrackingMetrics
+    from utils.inc.reporting import ResearcherData
     from utils.inc.oriented_bounding_boxes import rotate_points
 else:
     from .utils.inc.settings import settings, project_path
     from .utils.inc.reporting import TrackingMetrics
+    from .utils.inc.reporting import ResearcherData
     from .utils.inc.oriented_bounding_boxes import rotate_points
 
 
@@ -147,6 +149,7 @@ class DolphinTracker:
 
         data = []
         researcher_data = []
+        researcher_data_accumulator = ResearcherData(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         image_files_index = []
 
         for i, result in enumerate(results):
@@ -177,6 +180,9 @@ class DolphinTracker:
                     - Evaluation against ground truth isn't built out yet.
                     """
                     self.using_obb = True
+                    researcher_data_accumulator.set_bbox_type('obb')
+                    researcher_data_accumulator.set_units('px')
+
                     center_x_px, center_y_px, width_px, height_px, rotation = torch.flatten(xywhr).tolist()
                     x1, y1, x2, y2, x3, y3, x4, y4 = torch.flatten(xyxyxyxy).tolist()
                     x1, y1, x2, y2, x3, y3, x4, y4 = rotate_points(x1, y1, x2, y2, x3, y3, x4, y4, rotation)
@@ -186,6 +192,9 @@ class DolphinTracker:
                          y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
                     image_files_index.append(str(files[i]))
                     researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
+
+                    bbox = [center_x_px, center_y_px, width_px, height_px, rotation]
+                    researcher_data_accumulator.add_object(frame_id, -1, bbox)
             else:
                 for box in result.boxes:
                     if box.id:
@@ -211,12 +220,20 @@ class DolphinTracker:
                         researcher_data.append(
                             [frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px, width_px,
                              height_px, center_x_px, center_y_px])
+
+                        researcher_data_accumulator.add_object(frame_id, track_id, bbox)
+
                         if camera_df is not None and camera_row is not None:
                             gsd_mpx = camera_row['GSD_cmpx'] / 100
                             researcher_data[-1].extend(
                                 [point_a_x_px * gsd_mpx, point_a_y_px * gsd_mpx, point_b_x_px * gsd_mpx,
                                  point_b_y_px * gsd_mpx, width_px * gsd_mpx, height_px * gsd_mpx, center_x_px * gsd_mpx,
                                  center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]])
+
+        researcher_data_accumulator.finished_adding_objects()
+        researcher_data_accumulator.reformat_bbox('xywh')
+        researcher_data_accumulator.add_conversion_columns('px')
+
         if self.using_obb:
             df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
                           'Unused3']
@@ -243,6 +260,9 @@ class DolphinTracker:
             self._add_custom_researcher_columns(researcher_df)
             researcher_df.to_csv(self.researcher_output_path, index=False)
             print(f"Wrote researcher output data to {self.researcher_output_path}")
+
+            test_researcher_output_path = self.output_dir_path / f'{self.run_name}_test_{settings["researcher_output_suffix"]}'
+            researcher_data_accumulator.to_csv(test_researcher_output_path)
 
     def _add_custom_researcher_columns(self, researcher_df):
         # Calculate the count of individuals in the frame
