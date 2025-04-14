@@ -90,6 +90,8 @@ class ResearcherData:
     def set_units(self, units):
         if units not in self.BBOX_UNITS:
             raise ValueError(f"Invalid units: {units}. Must be one of {self.BBOX_UNITS}.")
+        elif self.units == units:
+            return
         elif len(self.data) > 0:
             raise ValueError(f"Cannot change input units from {self.units} to {units} after data has been added.")
         else:

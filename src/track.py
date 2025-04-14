@@ -231,8 +231,9 @@ class DolphinTracker:
                                  center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]])
 
         researcher_data_accumulator.finished_adding_objects()
-        researcher_data_accumulator.reformat_bbox('xywh')
-        researcher_data_accumulator.add_conversion_columns('px')
+        if not self.using_obb:
+            researcher_data_accumulator.reformat_bbox('xywh')
+            researcher_data_accumulator.add_conversion_columns('px')
         researcher_data_accumulator.load_srt_altitudes(srt_path) if srt_path is not None else None
         researcher_data_accumulator.load_manual_altitudes(manual_altitude) if manual_altitude is not None else None
         if srt_path is not None or manual_altitude is not None:
