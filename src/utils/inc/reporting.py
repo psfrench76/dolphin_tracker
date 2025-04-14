@@ -300,34 +300,6 @@ class ResearcherData:
                 self.data_columns.append(f"Distances_{units}")
                 self.data_columns.append(f"MaxDistance_{units}")
 
-        # Calculate the furthest distance between any two individuals
-        # This results in a single value per frame_id
-        # researcher_df[max_col] = researcher_df.groupby('FrameID')[distance_col].transform(
-        #     lambda x: max((max(d.values()) for d in x if d), default=0))
-
-        # distances = []
-        # if 'GSD_cmpx' in self.df:
-        #     center_x_col = 'CenterX_m'
-        #     center_y_col = 'CenterY_m'
-        #     distance_col = 'Distances_m'
-        #     max_col = 'MaxDistance_m'
-        # else:
-        #     center_x_col = 'CenterX_px'
-        #     center_y_col = 'CenterY_px'
-        #     distance_col = 'Distances_px'
-        #     max_col = 'MaxDistance_px'
-        #
-        # for frame_index, group in self.df.groupby('FrameIndex'):
-        #     centers = group[[center_x_col, center_y_col]].values
-        #     object_ids = group['ObjectID'].values
-        #     dist_matrix = np.linalg.norm(centers[:, np.newaxis] - centers, axis=2)
-        #     for i in range(len(group)):
-        #         dist_dict = {object_ids[j]: dist_matrix[i, j] for j in range(len(group)) if i != j}
-        #         distances.append(dist_dict)
-        #
-        # researcher_df[distance_col] = distances
-
-
 
     def _convert_to_df(self):
         df = pd.DataFrame(self.data, columns=self._all_columns())
@@ -340,34 +312,8 @@ class ResearcherData:
         return df
 
     def _convert_data_columns(self, from_units, to_units, drop_original):
-        # column_pattern = re.compile(r'(\S+)_([a-z]+)\s?')
         new_columns = self.data_columns.copy()
         converted_columns = []
-
-        # for full_col_name in self.data_columns:
-        #     match = column_pattern.match(full_col_name)
-        #     if not match:
-        #         raise ValueError(f"Invalid column name: {full_col_name}. Must match pattern: {column_pattern.pattern}")
-        #     col_base_name = match.group(1)
-        #     col_units = match.group(2)
-        #
-        #     if col_units != from_units:
-        #         continue
-        #
-        #     if drop_original:
-        #         new_columns.remove(full_col_name)
-        #
-        #     new_col_name = f"{col_base_name}_{to_units}"
-        #
-        #     if from_units == 'pct' and to_units == 'px':
-        #         self.df[new_col_name] = self._convert_values_pct_to_px(self.df[full_col_name], col_base_name)
-        #     elif from_units == 'px' and to_units == 'm':
-        #         self.df[new_col_name] = self._convert_values_px_to_m(self.df[full_col_name], col_base_name)
-        #     else:
-        #         raise NotImplementedError(f"Conversion from {from_units} to {to_units} not implemented.")
-        #
-        #     converted_columns.append(full_col_name)
-        #     new_columns.append(new_col_name)
 
         col_index = self._get_data_column_index()
         for units, columns in col_index.items():
@@ -408,30 +354,6 @@ class ResearcherData:
         return col_index
 
     def _reformat_bbox_columns(self, from_type, to_type, drop_original):
-        # column_pattern = re.compile(r'(\S+)_([a-z]+)\s?')
-        # new_columns = self.data_columns.copy()
-        # converted_columns = []
-        # bbox_col_index = defaultdict(dict)
-        #
-        # if from_type != self.bbox_type:
-        #     raise ValueError(f"Invalid from bbox_type: {from_type}. Must be {self.bbox_type}.")
-        #
-        # for full_col_name in self.data_columns:
-        #     match = column_pattern.match(full_col_name)
-        #     if not match:
-        #         raise ValueError(f"Invalid column name: {full_col_name}. Must match pattern: {column_pattern.pattern}")
-        #     col_base_name = match.group(1)
-        #     col_units = match.group(2)
-        #
-        #     if col_base_name not in self.BBOX_TYPES[from_type]:
-        #         continue
-        #
-        #     if drop_original:
-        #         new_columns.remove(full_col_name)
-        #
-        #     converted_columns.append(full_col_name)
-        #     bbox_col_index[col_units][col_base_name] = full_col_name
-
         bbox_col_index = self._get_data_column_index()
         new_columns = self.data_columns.copy()
         converted_columns = []

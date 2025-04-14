@@ -6,7 +6,6 @@ import re
 import torch
 import yaml
 import cv2
-import pysrt
 from pathlib import Path
 from shapely.geometry import box as shape_box
 import argparse
@@ -24,8 +23,8 @@ else:
 
 
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False, nopersist=False,
-                                camera_df=None, srt_path=None, drone_profile=None, manual_altitude=None,
-                                calibration=None, evaluate=True):
+                                srt_path=None, drone_profile=None, manual_altitude=None, calibration=None,
+                                evaluate=True):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -136,31 +135,15 @@ class DolphinTracker:
         img_height, img_width = first_image.shape[:2]
         self.last_img_height = img_height
 
-        camera_df = self._load_srt_altitudes(srt_path) if srt_path else None
-
         drone_profile = drone_profile or settings['default_drone_profile']
-        if manual_altitude:
-            if camera_df is None:
-                camera_df = pd.DataFrame(index=range(len(files)))
-            self._load_manual_altitudes(camera_df, float(manual_altitude))
-
-        if camera_df is not None:
-            self._calculate_gsd(camera_df, drone_profile, calibration)
 
         data = []
-        researcher_data = []
         researcher_data_accumulator = ResearcherData(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         image_files_index = []
 
         for i, result in enumerate(results):
             match = re.search(pattern, str(files[i]))
             frame_id = match.group(1)
-            if camera_df is not None:
-                if i < len(camera_df):
-                    camera_row = camera_df.iloc[i]
-                else:
-                    print(f"Warning: Ran out of rows in SRT file at frame index {i + 1} (frame ID {frame_id})."
-                          f"Will use altitude and focal length from the last available row for the remaining frames.")
 
             if result.obb:
                 for xywhr, xyxyxyxy in zip(result.obb.xywhr, result.obb.xyxyxyxy):
@@ -173,10 +156,10 @@ class DolphinTracker:
                     functional and will require further development to be useful. Below are some notes on the work
                     remaining, but it should not be considered exhaustive. Intrepid travellers, beware.
 
-                    - Track IDs aren't available yet -- need get them
+                    - Track IDs aren't integrated yet -- need get them
                     - Right now this always sets the orientation to the bottom-rightest side. YOLO-OBB does some weird
                         things with the rotation (see https://docs.ultralytics.com/datasets/obb/#yolo-obb-format).
-                    - Researcher data isn't built out yet.
+                    - Researcher data isn't fully built out yet.
                     - Evaluation against ground truth isn't built out yet.
                     """
                     self.using_obb = True
@@ -191,7 +174,7 @@ class DolphinTracker:
                         [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
                          y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
                     image_files_index.append(str(files[i]))
-                    researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
+                    # researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
 
                     bbox = [center_x_px, center_y_px, width_px, height_px, rotation]
                     researcher_data_accumulator.add_object(i, frame_id, -1, bbox)
@@ -209,26 +192,7 @@ class DolphinTracker:
                         data.append([frame_id, track_id, center_x, center_y, width, height, -1, -1, conf])
                         image_files_index.append(str(files[i]))
 
-                        point_a_x_px = point_a_x * img_width
-                        point_a_y_px = point_a_y * img_height
-                        point_b_x_px = point_b_x * img_width
-                        point_b_y_px = point_b_y * img_height
-                        center_x_px = center_x * img_width
-                        center_y_px = center_y * img_height
-                        width_px = width * img_width
-                        height_px = height * img_height
-                        researcher_data.append(
-                            [frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px, width_px,
-                             height_px, center_x_px, center_y_px])
-
                         researcher_data_accumulator.add_object(i, frame_id, track_id, bbox)
-
-                        if camera_df is not None and camera_row is not None:
-                            gsd_mpx = camera_row['GSD_cmpx'] / 100
-                            researcher_data[-1].extend(
-                                [point_a_x_px * gsd_mpx, point_a_y_px * gsd_mpx, point_b_x_px * gsd_mpx,
-                                 point_b_y_px * gsd_mpx, width_px * gsd_mpx, height_px * gsd_mpx, center_x_px * gsd_mpx,
-                                 center_y_px * gsd_mpx, camera_row["est_alt_m"], camera_row["GSD_cmpx"]])
 
         researcher_data_accumulator.finished_adding_objects()
 
@@ -250,13 +214,9 @@ class DolphinTracker:
         if self.using_obb:
             df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
                           'Unused3']
-            researcher_columns = ['FrameID', 'ObjectID', 'CenterX_px', 'CenterY_px', 'Width_px', 'Height_px',
-                                  'Rotation']
         else:
             df_columns = ['FrameID', 'ObjectID', 'CenterX', 'CenterY', 'Width', 'Height', 'Unused1', 'Unused2',
                           'Confidence']
-            researcher_columns = ['FrameID', 'ObjectID', 'Point1X_px', 'Point1Y_px', 'Point2X_px', 'Point2Y_px',
-                                  'Width_px', 'Height_px', 'CenterX_px', 'CenterY_px']
         df = pd.DataFrame(data, columns=df_columns)
         df.to_csv(self.results_file_path, index=False, header=False)
         print(f"Wrote raw results to {self.results_file_path}")
@@ -264,64 +224,8 @@ class DolphinTracker:
         images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
         images_df.to_csv(self.images_index_file_path, index=False, header=False)
 
-        if researcher_data:
-            if camera_df is not None:
-                researcher_columns.extend(
-                    ['Point1X_m', 'Point1Y_m', 'Point2X_m', 'Point2Y_m', 'Width_m', 'Height_m', 'CenterX_m',
-                     'CenterY_m', 'Altitude_m', 'GSD_cmpx'])
-            researcher_df = pd.DataFrame(researcher_data, columns=researcher_columns)
-            self._add_custom_researcher_columns(researcher_df)
-            researcher_df.to_csv(self.researcher_output_path, index=False)
-            print(f"Wrote researcher output data to {self.researcher_output_path}")
-
-            test_researcher_output_path = self.output_dir_path / f'{self.run_name}_test_{settings["researcher_output_suffix"]}'
-            researcher_data_accumulator.to_csv(test_researcher_output_path)
-
-    def _add_custom_researcher_columns(self, researcher_df):
-        # Calculate the count of individuals in the frame
-        # There is only one count of individuals in the frame, and it's reflected in the number of rows per frame_id.
-        # Simple enough to add as a column in the researcher output.
-        researcher_df['IndividualCount'] = researcher_df.groupby('FrameID')['ObjectID'].transform('count')
-
-        # Calculate the distance between each pair of individuals
-        # This results in dimensional expansion. Perhaps best as an array within a cell?
-
-        distances = []
-        if 'GSD_cmpx' in researcher_df:
-            center_x_col = 'CenterX_m'
-            center_y_col = 'CenterY_m'
-            distance_col = 'Distances_m'
-            max_col = 'MaxDistance_m'
-        else:
-            center_x_col = 'CenterX_px'
-            center_y_col = 'CenterY_px'
-            distance_col = 'Distances_px'
-            max_col = 'MaxDistance_px'
-
-        for frame_id, group in researcher_df.groupby('FrameID'):
-            centers = group[[center_x_col, center_y_col]].values
-            object_ids = group['ObjectID'].values
-            dist_matrix = np.linalg.norm(centers[:, np.newaxis] - centers, axis=2)
-            for i in range(len(group)):
-                dist_dict = {object_ids[j]: dist_matrix[i, j] for j in range(len(group)) if i != j}
-                distances.append(dist_dict)
-
-        researcher_df[distance_col] = distances
-
-        # Calculate the furthest distance between any two individuals
-        # This results in a single value per frame_id
-        researcher_df[max_col] = researcher_df.groupby('FrameID')[distance_col].transform(
-            lambda x: max((max(d.values()) for d in x if d), default=0))
-
-        # NOT READY: waiting on features or explanations
-
-        # Calculate the orientation of each individual relative to each other
-        # This results in dimensional expansion. Also relies on orientations (to be developed).
-
-        # Calculate the interval of appearance on the surface
-        # Needs more detail -- is this per individual? Distances between dives between individuals? Dimensionality?
-
-        pass
+        researcher_data_accumulator.to_csv(self.researcher_output_path)
+        print(f"Wrote researcher output data to {self.researcher_output_path}")
 
     def _save_ground_truth(self, label_dir_path):
         files = list(label_dir_path.glob('*.txt'))
@@ -450,115 +354,6 @@ class DolphinTracker:
         print(f"\nResults written to {self.metrics_file_path}")
 
         return summary
-
-    def _load_manual_altitudes(self, camera_df, manual_altitude):
-        camera_df['est_alt_m'] = manual_altitude
-
-    def _load_srt_altitudes(self, srt_path):
-        srt = pysrt.open(srt_path)
-        altitudes = []
-        frame_indexes = []
-        focal_lengths = []
-        rel_alt_pattern = r"\[rel_alt\ ?:\ (\S*)"
-        focal_len_pattern = r"\[focal_len\ ?:\ (\d*)"
-
-        for sub in srt:
-            rel_alt_match = re.search(rel_alt_pattern, sub.text)
-            focal_len_match = re.search(focal_len_pattern, sub.text)
-
-            if rel_alt_match and focal_len_match:
-                altitudes.append(float(rel_alt_match.group(1)))
-                focal_lengths.append(float(focal_len_match.group(1)))
-                frame_indexes.append(sub.index)
-            else:
-                raise ValueError(
-                    f"Could not find relative altitude or focal length in frame {sub.index} subtitle: {sub.text}")
-
-        df = pd.DataFrame({'frame_index': frame_indexes, 'rel_alt_m': altitudes, 'focal_len_raw': focal_lengths})
-        df['est_alt_m'] = df['rel_alt_m'] + settings['estimated_drone_starting_altitude_m']
-
-        return df
-
-    def _calculate_gsd(self, df, drone_profile, calibration=None):
-        drone_profile = Path(drone_profile)
-        drone_profile_path = project_path(settings['drone_profile_dir']) / f"{drone_profile.stem}.yaml"
-        with open(drone_profile_path, 'r') as file:
-            drone_settings = yaml.safe_load(file)
-
-        if drone_settings['gsd_calculation_mode'] == 'fov':
-            # For 90 deg overhead videos:
-            # tan(fov/2) = (field_height_m/2) / altitude_m
-            # equivalently:
-            # field_height_m = 2 * altitude_m * tan(fov/2)
-            # GSD_mpx = field_height_m / image_height_px
-            # GSD_cmpx = GSD_mpx * 100
-            if 'camera_vertical_fov_deg' in drone_settings:
-                df['GSD_cmpx'] = 100 * (2 * df['est_alt_m'] * np.tan(
-                    np.radians(drone_settings['camera_vertical_fov_deg'] / 2))) / self.last_img_height
-            else:
-                raise ValueError(
-                    "camera_vertical_fov_deg must be provided in the drone profile for fov-mode GSD calculation")
-
-            print(f"\nSRT data for first frame before calibration factor: GSD: {df['GSD_cmpx'][0]} cm/px. "
-                  f"Image height: {self.last_img_height} px. "
-                  f"Estimated altitude: {df['est_alt_m'][0]} m. Camera vertical FOV: "
-                  f"{drone_settings['camera_vertical_fov_deg']} deg.")
-            print(f"\nFormula for GSD: 100 * (2 * estimated altitude * tan(vertical FOV/2)) / image height")
-
-        elif drone_settings['gsd_calculation_mode'] == 'sensor' or drone_settings['gsd_calculation_mode'] == 'focal':
-            if 'sensor_height_mm' in drone_settings:
-                sensor_height = drone_settings['sensor_height_mm']
-            else:
-                raise ValueError(
-                    "sensor_height_mm must be provided in the drone profile for sensor-mode or focal-mode GSD "
-                    "calculation.")
-
-            if drone_settings['gsd_calculation_mode'] == 'sensor':
-                if 'focal_length_multiplier' in drone_settings:
-                    focal_length_multiplier = drone_settings['focal_length_multiplier']
-                else:
-                    raise ValueError(
-                        "focal_length_multiplier must be provided in the drone profile for sensor-mode GSD "
-                        "calculation.")
-
-                if 'crop_factor' in drone_settings:
-                    crop_factor = drone_settings['crop_factor']
-                else:
-                    raise ValueError(
-                        "crop_factor must be provided in the drone profile for sensor-mode GSD calculation.")
-
-                if 'focal_len_raw' not in df:
-                    raise ValueError(
-                        "focal length must be provided in the SRT file for sensor-mode GSD calculation. Did you forget"
-                        " to specify the srt file? If you do not have one, use the --altitude argument to specify"
-                        " the altitude manually, and use 'fov' or 'focal' as the GSD calculation mode in the drone "
-                        "profile.")
-
-                df['focal_len_mm'] = df['focal_len_raw'] * focal_length_multiplier / crop_factor
-            else:
-                if 'focal_length_mm' in drone_settings:
-                    df['focal_len_mm'] = drone_settings['focal_length_mm']
-                else:
-                    raise ValueError(
-                        "focal_length_mm must be provided in the drone profile for focal-mode GSD calculation.")
-
-            df['GSD_cmpx'] = (df['est_alt_m'] * 100 * sensor_height) / (df['focal_len_mm'] * self.last_img_height)
-            print(f"\nSRT data for first frame before calibration factor: GSD: {df['GSD_cmpx'][0]} cm/px. "
-                  f"Image height: {self.last_img_height} px. "
-                  f"Focal length: {df['focal_len_mm'][0]} mm. "
-                  f"Estimated altitude: {df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} "
-                  f"mm.")
-            print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
-
-        else:
-            raise ValueError(f"Invalid GSD calculation mode: {drone_settings['gsd_calculation_mode']}")
-
-        if not calibration and 'manual_calibration_factor' in drone_settings:
-            calibration = drone_settings['manual_calibration_factor']
-
-        if calibration:
-            df['GSD_cmpx'] *= calibration
-            print(f"Applied manual calibration factor of {calibration}")
 
 
 def main():
