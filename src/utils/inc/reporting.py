@@ -166,16 +166,16 @@ class ResearcherData:
 
             srt_data.append({
                 'FrameIndex': int(sub.index - sub_base_index),
-                'rel_alt_m': float(alt_match.group(1)),
-                'focal_len_raw': float(focal_match.group(1)),
+                'RelAltitude_m': float(alt_match.group(1)),
+                'FocalLengthRaw': float(focal_match.group(1)),
             })
 
         srt_df = pd.DataFrame(srt_data)
-        srt_df['est_alt_m'] = srt_df['rel_alt_m'] + base_altitude
+        srt_df['EstAltitude_m'] = srt_df['RelAltitude_m'] + base_altitude
 
         new_df = self.df.merge(srt_df, on='FrameIndex', how='left')
 
-        new_columns = ['rel_alt_m', 'focal_len_raw', 'est_alt_m']
+        new_columns = ['RelAltitude_m', 'FocalLengthRaw', 'EstAltitude_m']
 
         affected_rows = new_df[new_columns].isna().any(axis=1).sum()
         if affected_rows > 0:
@@ -190,7 +190,7 @@ class ResearcherData:
     def load_manual_altitudes(self, manual_altitude):
         if not self.finished:
             raise ValueError("Cannot load altitudes before calling finished_adding_objects().")
-        self.df['est_alt_m'] = float(manual_altitude)
+        self.df['EstAltitude_m'] = float(manual_altitude)
 
     def add_gsd_column(self, drone_profile, calibration):
         drone_profile = drone_profile or settings['default_drone_profile']
@@ -210,7 +210,7 @@ class ResearcherData:
             # GSD_mpx = field_height_m / image_height_px
             # GSD_cmpx = GSD_mpx * 100
             if 'camera_vertical_fov_deg' in drone_settings:
-                self.df['GSD_cmpx'] = 100 * (2 * self.df['est_alt_m'] * np.tan(
+                self.df['GSD_cmpx'] = 100 * (2 * self.df['EstAltitude_m'] * np.tan(
                     np.radians(drone_settings['camera_vertical_fov_deg'] / 2))) / self.img_height
             else:
                 raise ValueError(
@@ -218,7 +218,7 @@ class ResearcherData:
 
             print(f"\nSRT data for first frame before calibration factor: GSD: {self.df['GSD_cmpx'][0]} cm/px. "
                   f"Image height: {self.img_height} px. "
-                  f"Estimated altitude: {self.df['est_alt_m'][0]} m. Camera vertical FOV: "
+                  f"Estimated altitude: {self.df['EstAltitude_m'][0]} m. Camera vertical FOV: "
                   f"{drone_settings['camera_vertical_fov_deg']} deg.")
             print(f"\nFormula for GSD: 100 * (2 * estimated altitude * tan(vertical FOV/2)) / image height")
 
@@ -244,26 +244,26 @@ class ResearcherData:
                     raise ValueError(
                         "crop_factor must be provided in the drone profile for sensor-mode GSD calculation.")
 
-                if 'focal_len_raw' not in self.df:
+                if 'FocalLengthRaw' not in self.df:
                     raise ValueError(
                         "focal length must be provided in the SRT file for sensor-mode GSD calculation. Did you forget"
                         " to specify the srt file? If you do not have one, use the --altitude argument to specify"
                         " the altitude manually, and use 'fov' or 'focal' as the GSD calculation mode in the drone "
                         "profile.")
 
-                self.df['focal_len_mm'] = self.df['focal_len_raw'] * focal_length_multiplier / crop_factor
+                self.df['FocalLength_mm'] = self.df['FocalLengthRaw'] * focal_length_multiplier / crop_factor
             else:
                 if 'focal_length_mm' in drone_settings:
-                    self.df['focal_len_mm'] = drone_settings['focal_length_mm']
+                    self.df['FocalLength_mm'] = drone_settings['focal_length_mm']
                 else:
                     raise ValueError(
                         "focal_length_mm must be provided in the drone profile for focal-mode GSD calculation.")
 
-            self.df['GSD_cmpx'] = (self.df['est_alt_m'] * 100 * sensor_height) / (self.df['focal_len_mm'] * self.img_height)
+            self.df['GSD_cmpx'] = (self.df['EstAltitude_m'] * 100 * sensor_height) / (self.df['FocalLength_mm'] * self.img_height)
             print(f"\nSRT data for first frame before calibration factor: GSD: {self.df['GSD_cmpx'][0]} cm/px. "
                   f"Image height: {self.img_height} px. "
-                  f"Focal length: {self.df['focal_len_mm'][0]} mm. "
-                  f"Estimated altitude: {self.df['est_alt_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} "
+                  f"Focal length: {self.df['FocalLength_mm'][0]} mm. "
+                  f"Estimated altitude: {self.df['EstAltitude_m'][0]} m. Sensor height: {settings['drone_sensor_height_mm']} "
                   f"mm.")
             print(f"\nFormula for GSD: (estimated altitude*100 * sensor height/10) / (focal length/10 * image height)")
 
@@ -297,6 +297,8 @@ class ResearcherData:
                 self.df[f"Distances_{units}"] = distances
                 self.df[f"MaxDistance_{units}"] = self.df.groupby('FrameID')[f"Distances_{units}"].transform(
                     lambda x: max((max(d.values()) for d in x if d), default=0))
+                self.data_columns.append(f"Distances_{units}")
+                self.data_columns.append(f"MaxDistance_{units}")
 
         # Calculate the furthest distance between any two individuals
         # This results in a single value per frame_id
@@ -471,7 +473,10 @@ class ResearcherData:
     def _convert_values_px_to_m(self, value, col_name):
         ground_sampling_distance_column = 'GSD_cmpx'
         if ground_sampling_distance_column in self.df.columns:
-            return value * self.df[ground_sampling_distance_column] / 100
+            if col_name == 'Distances':
+                raise NotImplementedError("Distance conversion from px to m not implemented. Please convert px to m BEFORE calculating distances.")
+            else:
+                return value * self.df[ground_sampling_distance_column] / 100
         else:
             raise ValueError(f"Ground sampling distance column '{ground_sampling_distance_column}' not found. Cannot convert pixels to meters.")
 
