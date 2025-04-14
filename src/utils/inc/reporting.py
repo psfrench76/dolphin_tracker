@@ -46,7 +46,7 @@ class TrackingMetrics:
         self.acc[0].mot_events.to_csv(filename)
 
 
-class ResearcherData:
+class DataAccumulator:
     BBOX_TYPES = {'obb': ['CenterX', 'CenterY', 'Width', 'Height', 'Rotation'],
                   'xyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y'],
                   'xywh': ['CenterX', 'CenterY', 'Width', 'Height'], }

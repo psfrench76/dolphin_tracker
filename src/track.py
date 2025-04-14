@@ -18,7 +18,7 @@ if __package__ is None or __package__ == '':
 else:
     from .utils.inc.settings import settings, project_path
     from .utils.inc.reporting import TrackingMetrics
-    from .utils.inc.reporting import ResearcherData
+    from .utils.inc.reporting import DataAccumulator
     from .utils.inc.oriented_bounding_boxes import rotate_points
 
 
@@ -138,7 +138,7 @@ class DolphinTracker:
         drone_profile = drone_profile or settings['default_drone_profile']
 
         data = []
-        researcher_data_accumulator = ResearcherData(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
+        researcher_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         image_files_index = []
 
         for i, result in enumerate(results):
@@ -174,7 +174,6 @@ class DolphinTracker:
                         [frame_id, -1, x1 / img_width, y1 / img_height, x2 / img_width, y2 / img_height, x3 / img_width,
                          y3 / img_height, x4 / img_width, y4 / img_height, -1, -1, -1])
                     image_files_index.append(str(files[i]))
-                    # researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
 
                     bbox = [center_x_px, center_y_px, width_px, height_px, rotation]
                     researcher_data_accumulator.add_object(i, frame_id, -1, bbox)
