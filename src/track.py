@@ -194,7 +194,7 @@ class DolphinTracker:
                     researcher_data.append([frame_id, -1, center_x_px, center_y_px, width_px, height_px, rotation])
 
                     bbox = [center_x_px, center_y_px, width_px, height_px, rotation]
-                    researcher_data_accumulator.add_object(frame_id, -1, bbox)
+                    researcher_data_accumulator.add_object(i, frame_id, -1, bbox)
             else:
                 for box in result.boxes:
                     if box.id:
@@ -221,7 +221,7 @@ class DolphinTracker:
                             [frame_id, track_id, point_a_x_px, point_a_y_px, point_b_x_px, point_b_y_px, width_px,
                              height_px, center_x_px, center_y_px])
 
-                        researcher_data_accumulator.add_object(frame_id, track_id, bbox)
+                        researcher_data_accumulator.add_object(i, frame_id, track_id, bbox)
 
                         if camera_df is not None and camera_row is not None:
                             gsd_mpx = camera_row['GSD_cmpx'] / 100
@@ -233,6 +233,13 @@ class DolphinTracker:
         researcher_data_accumulator.finished_adding_objects()
         researcher_data_accumulator.reformat_bbox('xywh')
         researcher_data_accumulator.add_conversion_columns('px')
+        researcher_data_accumulator.load_srt_altitudes(srt_path) if srt_path is not None else None
+        researcher_data_accumulator.load_manual_altitudes(manual_altitude) if manual_altitude is not None else None
+        if srt_path is not None or manual_altitude is not None:
+            researcher_data_accumulator.add_gsd_column(drone_profile, calibration)
+            researcher_data_accumulator.add_conversion_columns('m')
+        researcher_data_accumulator.add_individual_count_column()
+        researcher_data_accumulator.add_distances_columns()
 
         if self.using_obb:
             df_columns = ['FrameID', 'ObjectID', 'X1', 'Y1', 'X2', 'Y2', 'X3', 'Y3', 'X4', 'Y4', 'Unused1', 'Unused2',
@@ -399,10 +406,12 @@ class DolphinTracker:
 
         frames = sorted(gt_df['file_stem'].unique())
 
-        for frame in frames:
+        for idx, file_stem in enumerate(frames):
 
-            g = gt_df[gt_df['file_stem'] == frame]
-            p = pred_df[pred_df['file_stem'] == frame]
+            g = gt_df[gt_df['file_stem'] == file_stem]
+            p = pred_df[pred_df['file_stem'] == file_stem]
+            #
+            # frame_id = g['FrameId'].values[0]
 
             g = g.dropna()
 
@@ -423,10 +432,10 @@ class DolphinTracker:
                         distances[i, j] = 1 - iou
 
             # Before updating the accumulator, print the current frame and IDs
-            print(f"Processing frame: {frame} Ground truth IDs: {gt_ids} Tracker IDs: {pr_ids}")
+            print(f"Processing frame: {file_stem} Ground truth IDs: {gt_ids} Tracker IDs: {pr_ids}")
 
             # Update the accumulator
-            tm.update(gt_ids, pr_ids, distances, frame)
+            tm.update(gt_ids, pr_ids, distances, idx)
 
         summary = tm.compute(metrics=metrics, outfile=self.metrics_file_path, printsum=True)
 
