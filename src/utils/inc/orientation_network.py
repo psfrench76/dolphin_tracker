@@ -3,6 +3,7 @@ import torch.nn as nn
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights
 import pandas as pd
+from tqdm import tqdm
 
 class OrientationResNet(nn.Module):
     def __init__(self):
@@ -50,7 +51,7 @@ class OrientationResNet(nn.Module):
         all_indices = []
         all_tracks = []
         with torch.no_grad():
-            for images, _, tracks, idxs in dataloader:
+            for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting orientations", unit="batch"):
                 images = images.to(self.device)
                 outputs = self(images)
                 all_outputs.append(outputs.cpu())
@@ -78,5 +79,5 @@ class OrientationResNet(nn.Module):
         df.columns = ['angle', 'x_val', 'y_val']
         df = pd.concat([df, other_data], axis=1)
         df.sort_values(by=['filename', 'object_id'], inplace=True)
-        print(df)
+
         df.to_csv(file_path, index=False, header=True)
