@@ -28,11 +28,13 @@ class DolphinOrientationDataset(Dataset):
         self.orientations_index = {}
         self.orientations_dir = self.dataset_root_path / settings['orientations_dir']
 
-        self.tracks_dir = self.dataset_root_path / settings['tracks_dir']
-        tracks_files = sorted(self.tracks_dir.iterdir())
         self.tracks_index = {}
-        for tracks_file in tracks_files:
-            self.tracks_index[tracks_file.stem] = tracks_file
+        self.tracks_dir = self.dataset_root_path / settings['tracks_dir']
+
+        if self.tracks_dir.exists():
+            tracks_files = sorted(self.tracks_dir.iterdir())
+            for tracks_file in tracks_files:
+                self.tracks_index[tracks_file.stem] = tracks_file
 
         if annotations:
             annotations_path = Path(annotations)
