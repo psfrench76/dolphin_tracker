@@ -117,15 +117,31 @@ def main():
         yaml.dump(run_args, f)
 
     output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
+    output_file_path = output_dir_path / output_filename
     tracker_results_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
     images_index_file = output_dir_path / f"{input_name}_{settings['images_index_suffix']}"
 
+    researcher_data_accumulator = DataAccumulator(bbox_type='xyxy', units='pct')
+
     run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, srt_path=srt_path,
                                 drone_profile=args.drone_config, calibration=args.calibration,
-                                manual_altitude=args.altitude)
+                                manual_altitude=args.altitude, researcher_data_accumulator=researcher_data_accumulator)
 
-    summary_log.add(f"Tracking and evaluation complete. CSV results can be found in "
-                    f"{output_dir_path / output_filename}")
+    drone_profile = args.drone_config or settings['default_drone_profile']
+
+    if srt_path is not None or args.altitude is not None:
+        if srt_path is not None:
+            researcher_data_accumulator.load_srt_altitudes(srt_path)
+        if args.altitude is not None:
+            researcher_data_accumulator.load_manual_altitudes(args.altitude)
+        researcher_data_accumulator.add_gsd_column(drone_profile, args.calibration)
+        researcher_data_accumulator.add_conversion_columns('m')
+
+    researcher_data_accumulator.add_individual_count_column()
+    researcher_data_accumulator.add_distances_columns()
+
+
+    summary_log.add(f"Tracking and evaluation complete.")
 
     print(f"\nTracking and evaluation complete.\n")
 
@@ -158,6 +174,12 @@ def main():
 
     model.write_outputs(all_outputs, other_df, orientations_outfile_path)
     print(f"Final angles saved to {orientations_outfile_path}")
+
+    researcher_data_accumulator.load_orientations(orientations_outfile_path)
+    researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
+
+    print(f"Final results saved to {output_file_path}")
+    summary_log.add(f"Final results saved to {output_file_path}")
 
     # The resize argument in generate_video_with_labels can be either a ratio or a pixel width
     if args.resize_ratio:

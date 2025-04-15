@@ -68,6 +68,15 @@ class DataAccumulator:
         self.set_bbox_type(bbox_type)
         self.set_units(units)
 
+    def set_imgsize(self, width, height):
+        if self.img_width is not None and self.img_height is not None:
+            raise ValueError("Image dimensions already set. Cannot change after data has been added.")
+        elif len(self.data) > 0:
+            raise ValueError("Cannot change image dimensions after data has been added.")
+        else:
+            self.img_width = width
+            self.img_height = height
+
     def to_csv(self, filepath, ignore_columns=None, mot15=False, header=True, only_columns=None):
         if not self.finished:
             raise ValueError("Cannot write to csv before calling finished_adding_objects().")
@@ -205,6 +214,29 @@ class DataAccumulator:
         if not self.finished:
             raise ValueError("Cannot load altitudes before calling finished_adding_objects().")
         self.df['EstAltitude_m'] = float(manual_altitude)
+
+    def load_orientations(self, orientation_outfile_path):
+        if not self.finished:
+            raise ValueError("Cannot load orientations before calling finished_adding_objects().")
+        if not Path(orientation_outfile_path).exists():
+            raise ValueError(f"Orientation file {orientation_outfile_path} does not exist.")
+        orientation_df = pd.read_csv(orientation_outfile_path)
+
+        self.df['Angle_deg'] = orientation_df['angle']
+
+        # orientation_df.rename(columns={'angle': 'Angle_deg'}, inplace=True)
+        # # images_index_filename = orientation_outfile_path.parent / orientation_outfile_path.name.replace(
+        # #     settings['orientations_results_suffix'], settings['images_index_suffix'])
+        # # images_index = pd.read_csv(images_index_filename, header=None)
+        # # images_index.columns = ['filename']
+        # # images_index['filename'] = [Path(f).stem for f in images_index['filename']]
+        #
+        #
+        #
+        #
+        # orientation_df['FrameIndex'] = orientation_df['FrameIndex'].astype(int)
+        # self.df = self.df.merge(orientation_df, on='FrameIndex', how='left')
+        # self.df['Rotation'] = self.df['Rotation'].fillna(0)
 
     def add_gsd_column(self, drone_profile, calibration):
         drone_profile = drone_profile or settings['default_drone_profile']

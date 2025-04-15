@@ -24,7 +24,7 @@ else:
 
 def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, botsort=False, nopersist=False,
                                 srt_path=None, drone_profile=None, manual_altitude=None, calibration=None,
-                                evaluate=True):
+                                evaluate=True, researcher_data_accumulator=None):
     print(f"Loading configuration files...")
 
     dataset_path = Path(dataset_path)
@@ -33,7 +33,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
     image_dir_path = dataset_path / settings['images_dir']
     label_dir_path = dataset_path / settings['labels_dir']
 
-    tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist)
+    tracker = DolphinTracker(model_path, output_dir_path, tracker_path, botsort, nopersist, researcher_data_accumulator)
     results = tracker.track_from_images(image_dir_path)
     tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude, calibration)
     if evaluate:
@@ -45,11 +45,12 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
 
 class DolphinTracker:
 
-    def __init__(self, model_path, output_dir_path, tracker_path, botsort, nopersist):
+    def __init__(self, model_path, output_dir_path, tracker_path, botsort, nopersist, researcher_data_accumulator):
         self.model_path = Path(model_path)
         self.output_dir_path = Path(output_dir_path)
         self.output_dir_path.mkdir(parents=True, exist_ok=True)
         self.run_name = self.output_dir_path.name
+        self.researcher_data_accumulator = researcher_data_accumulator
 
         self.botsort = botsort
         self.nopersist = nopersist
@@ -132,10 +133,10 @@ class DolphinTracker:
             raise ValueError(f"Could not read image file {files[0]}")
 
         img_height, img_width = first_image.shape[:2]
-        drone_profile = drone_profile or settings['default_drone_profile']
 
         tracker_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
-        researcher_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
+        if self.researcher_data_accumulator:
+            self.researcher_data_accumulator.set_imgsize(img_width, img_height)
         image_files_index = []
 
         for i, result in enumerate(results):
@@ -160,8 +161,9 @@ class DolphinTracker:
                     - Evaluation against ground truth isn't built out yet.
                     """
                     self.using_obb = True
-                    researcher_data_accumulator.set_bbox_type('xywhr')
-                    researcher_data_accumulator.set_units('px')
+                    if self.researcher_data_accumulator:
+                        self.researcher_data_accumulator.set_bbox_type('xywhr')
+                        self.researcher_data_accumulator.set_units('px')
 
                     tracker_data_accumulator.set_bbox_type('xyxyxyxy')
                     tracker_data_accumulator.set_units('px')
@@ -174,9 +176,9 @@ class DolphinTracker:
 
                     bbox = [x1, y1, x2, y2, x3, y3, x4, y4]
                     tracker_data_accumulator.add_object(i, frame_id, -1, bbox)
-
-                    researcher_bbox = torch.flatten(xywhr).tolist()
-                    researcher_data_accumulator.add_object(i, frame_id, -1, researcher_bbox)
+                    if self.researcher_data_accumulator:
+                        researcher_bbox = torch.flatten(xywhr).tolist()
+                        self.researcher_data_accumulator.add_object(i, frame_id, -1, researcher_bbox)
             else:
                 for box in result.boxes:
                     if box.id:
@@ -187,34 +189,26 @@ class DolphinTracker:
                         image_files_index.append(str(files[i]))
 
                         tracker_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox, conf=conf)
-                        researcher_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox)
-
-        researcher_data_accumulator.finished_adding_objects()
+                        if self.researcher_data_accumulator:
+                            self.researcher_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox)
+        if self.researcher_data_accumulator:
+            self.researcher_data_accumulator.finished_adding_objects()
         tracker_data_accumulator.finished_adding_objects()
 
         if not self.using_obb:
-            researcher_data_accumulator.reformat_bbox('xywh', drop_original=True)
-            researcher_data_accumulator.add_conversion_columns('px', drop_original=True)
+            if self.researcher_data_accumulator:
+                self.researcher_data_accumulator.reformat_bbox('xywh', drop_original=True)
+                self.researcher_data_accumulator.add_conversion_columns('px', drop_original=True)
             tracker_data_accumulator.reformat_bbox('xywh', drop_original=True)
         else:
             tracker_data_accumulator.add_conversion_columns('pct', drop_original=True)
 
-        if srt_path is not None or manual_altitude is not None:
-            if srt_path is not None:
-                researcher_data_accumulator.load_srt_altitudes(srt_path)
-            if manual_altitude is not None:
-                researcher_data_accumulator.load_manual_altitudes(manual_altitude)
-            researcher_data_accumulator.add_gsd_column(drone_profile, calibration)
-            researcher_data_accumulator.add_conversion_columns('m')
 
-        researcher_data_accumulator.add_individual_count_column()
-        researcher_data_accumulator.add_distances_columns()
 
         images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
         images_df.to_csv(self.images_index_file_path, index=False, header=False)
 
-        researcher_data_accumulator.to_csv(self.researcher_output_path, ignore_columns=['Confidence'])
-        print(f"Wrote researcher output data to {self.researcher_output_path}")
+
 
         tracker_data_accumulator.to_csv(self.results_file_path, mot15=True)
         print(f"Wrote raw results to {self.results_file_path}")
