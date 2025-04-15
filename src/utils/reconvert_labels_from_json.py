@@ -46,8 +46,9 @@ def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox
     populated_missing_files = []
 
     for label_file in sorted(labels_dir_path.glob('*.txt')):
-        if label_file.stem in json_paths_index:
-            frame_stats = convert_and_save_label(json_paths_index[label_file.stem], dataset_root_path, oriented_bbox, xy_orientations)
+        label_stem = label_file.stem
+        if label_stem in json_paths_index:
+            frame_stats = convert_and_save_label(json_paths_index[label_stem], dataset_root_path, oriented_bbox, xy_orientations)
             converted_count += 1
             for key, value in frame_stats.items():
                 if key == 'unrecognized_shape_labels':
@@ -61,9 +62,9 @@ def _reconvert_labels_from_json(json_source_dir, dataset_root_dir, oriented_bbox
                                 run_stats[key][label] += count
                 else:
                     if key not in run_stats:
-                        run_stats[key] = {label_file.stem: value}
+                        run_stats[key] = {label_stem: value}
                     else:
-                        run_stats[key][label_file.stem] = value
+                        run_stats[key][label_stem] = value
         else:
             if label_file.stat().st_size == 0:
                 background_labels_count += 1

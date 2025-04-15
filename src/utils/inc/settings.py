@@ -56,7 +56,7 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def get_device_and_workers():
+def get_device_and_workers(split=True):
     import psutil
     from torch import cuda, device
     # TODO - this (cuda and workers) is (almost) the same as in train.py. Let's modularize this stuff.
@@ -64,10 +64,13 @@ def get_device_and_workers():
     num_cores = len(psutil.Process().cpu_affinity())
 
     # Set the number of workers to the recommended value
-    num_workers = int(min(16, num_cores) / 2)
+    if split:
+        num_workers = int(min(16, num_cores) / 2)
+    else:
+        num_workers = int(min(16, num_cores))
 
     print(f"Number of available CPU cores: {num_cores}")
-    print(f"Setting number of workers to: {num_workers} (divided by 2 for train/val split)")
+    print(f"Setting number of workers to: {num_workers}")
 
     # Check for CUDA availability
     if cuda.is_available():

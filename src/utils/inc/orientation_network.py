@@ -4,6 +4,8 @@ import torchvision.models as models
 from torchvision.models import ResNet18_Weights
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
+import numpy as np
 
 class OrientationResNet(nn.Module):
     def __init__(self):
@@ -64,6 +66,9 @@ class OrientationResNet(nn.Module):
         angle = torch.atan2(y_val, x_val) * (180 / torch.pi)  # Convert radians to degrees
         return angle
 
+    def calculate_angles_pd(self, x_col, y_col):
+        return np.arctan2(y_col, x_col) * (180 / np.pi)
+
     def compute_loss(self, predictions, targets):
         return self.loss_fn(predictions, targets)
 
@@ -81,3 +86,15 @@ class OrientationResNet(nn.Module):
         df.sort_values(by=['filename', 'object_id'], inplace=True)
 
         df.to_csv(file_path, index=False, header=True)
+        return df
+
+    def get_ground_truth(self, dataset):
+        gt_data = []
+        for i in range(len(dataset)):
+            filename, orientation, track, idx = dataset.get_ground_truth_label(i)
+            gt_data.append({'filename': Path(filename).stem, 'x_val': orientation[0], 'y_val': orientation[1],
+                            'object_id': track, 'dataloader_index': idx})
+
+        gt_df = pd.DataFrame(gt_data)
+        gt_df['angle'] = self.calculate_angles_pd(gt_df['x_val'], gt_df['y_val'])
+        return gt_df

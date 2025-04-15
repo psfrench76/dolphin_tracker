@@ -40,6 +40,7 @@ class DolphinOrientationDataset(Dataset):
             if not annotations_path.exists() or not images_index_path.exists():
                 raise FileNotFoundError(f"Annotations or images index file not found: {annotations_path}, {images_index_path}")
             self.annotations = self._convert_annotations_from_yolo(annotations_path, images_index_path)
+
         else:
             orientations_files = sorted(self.orientations_dir.iterdir())
             for orientations_file in orientations_files:
@@ -76,6 +77,9 @@ class DolphinOrientationDataset(Dataset):
 
     def get_image_path(self, idx):
         return self.annotations[idx]['image']
+
+    def get_ground_truth_label(self, idx):
+        return self.annotations[idx]['image'], self.annotations[idx]['orientation'], self.annotations[idx]['track'], idx
 
     def _load_annotations_from_dataset_dir(self, dataset_root_path):
         annotations = []

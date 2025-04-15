@@ -46,6 +46,55 @@ class TrackingMetrics:
         self.acc[0].mot_events.to_csv(filename)
 
 
+class OrientationMetrics:
+    def __init__(self, pred_df, gt_df):
+        self.pred_df = pred_df
+        self.gt_df = gt_df
+        self.metrics = {}
+
+        original_length = len(self.gt_df)
+        self.lines = self.gt_df.copy()
+        self.lines = self.lines.merge(self.pred_df, on=['dataloader_index', 'object_id', 'filename'], suffixes=['_gt', '_pred'])
+        if len(self.lines) != original_length:
+            raise ValueError(f"Mismatch in length of line results: {len(self.lines)} vs {original_length}")
+        self.lines = self.lines[['filename', 'dataloader_index', 'object_id', 'angle_gt', 'angle_pred', 'x_val_gt', 'y_val_gt', 'x_val_pred', 'y_val_pred']]
+
+    def calculate_metrics(self):
+
+        print(self.lines)
+
+        pred_angles_rad = np.radians(self.lines['angle_pred'])
+        gt_angles_rad = np.radians(self.lines['angle_gt'])
+
+        cos_diff = np.cos(pred_angles_rad) - np.cos(gt_angles_rad)
+        self.lines['cosine_diff'] = cos_diff
+        self.metrics['MAE_Cos'] = np.mean(np.abs(cos_diff))
+
+        angular_distance = np.degrees(np.arccos(np.clip(np.cos(pred_angles_rad - gt_angles_rad), -1.0, 1.0)))
+        self.lines['angular_distance'] = angular_distance
+        self.metrics['MeanAngularDistance'] = np.mean(angular_distance)
+
+        # Calculate vector norm error
+        x_diff = self.lines['x_val_pred'] - self.lines['x_val_gt']
+        y_diff = self.lines['y_val_pred'] - self.lines['y_val_gt']
+        vector_norm_error = np.sqrt(x_diff ** 2 + y_diff ** 2)
+        self.lines['vector_norm_error'] = vector_norm_error
+        self.metrics['MeanVectorNormError'] = np.mean(vector_norm_error)
+
+        return self.metrics
+
+    def print_results(self):
+        print("\nOrientation Metrics:")
+        for metric, value in self.metrics.items():
+            print(f"{metric}: {value:.4f}")
+
+    def write_results(self, filename):
+        df = pd.DataFrame([self.metrics])
+        df.to_csv(filename, index=False)
+
+    def write_line_results(self, filename):
+        self.lines.to_csv(filename, index=False)
+
 class DataAccumulator:
     BBOX_TYPES = {'xywhr': ['CenterX', 'CenterY', 'Width', 'Height', 'Rotation'],
                   'xyxyxyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y', 'Point3X', 'Point3Y', 'Point4X', 'Point4Y'],
