@@ -5,8 +5,13 @@ import yaml
 from pathlib import Path
 from src.track import run_tracking_and_evaluation
 from src.utils.inc.video_processing import generate_video_with_labels, extract_frames
-from src.utils.inc.settings import settings, storage_path, project_path
-
+from src.utils.inc.settings import settings, storage_path, project_path, get_device_and_workers
+from src.utils.inc.reporting import DataAccumulator
+from src.utils.inc.orientation_network import OrientationResNet
+from src.utils.inc.orientation_dataset import DolphinOrientationDataset
+from torch.utils.data import DataLoader
+import torch
+import pandas as pd
 
 def main():
     parser = argparse.ArgumentParser()
@@ -19,6 +24,8 @@ def main():
                         help="Break video into individual frames and store in a dataset directory.")
     parser.add_argument('--srt', '-srt', type=Path, help="Path to an SRT file corresponding to the video input.")
     parser.add_argument('--model', '-m', type=Path, help="Path to the model (weights) file.")
+    parser.add_argument('--orientation_model', '-om', type=Path,
+                        help="Path to the orientation model (weights) file.")
     parser.add_argument('--tracker', '-t', type=Path, help="Path to the tracker file.")
     parser.add_argument('--drone_config', '-dc', type=str,
                         help=f"Drone configuration file, in the {settings['drone_profile_dir']} directory")
@@ -110,6 +117,8 @@ def main():
         yaml.dump(run_args, f)
 
     output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
+    tracker_results_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
+    images_index_file = output_dir_path / f"{input_name}_{settings['images_index_suffix']}"
 
     run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, tracker_path, srt_path=srt_path,
                                 drone_profile=args.drone_config, calibration=args.calibration,
@@ -119,6 +128,36 @@ def main():
                     f"{output_dir_path / output_filename}")
 
     print(f"\nTracking and evaluation complete.\n")
+
+    print(f"\nStarting dolphin orientation prediction...\n")
+    device, num_workers = get_device_and_workers()
+    orientation_model_path = args.orientation_model or storage_path(settings['default_orientation_model'])
+    orientations_outfile_path = output_dir_path / f"{input_name}_{settings['orientations_results_suffix']}"
+
+    print(f"Predicting on dataset {dataset_path}. Loading model weights from {orientation_model_path}")
+
+    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_path, annotations=tracker_results_path, images_index_file=images_index_file)
+    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
+
+    model = OrientationResNet()
+    model.load_state_dict(torch.load(orientation_model_path, map_location=device, weights_only=True))
+    model.set_device(device)
+
+    all_outputs, all_indices, all_tracks = model.predict(dataloader)
+    all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
+
+    print(f"Orientation predictions complete. Saving to {orientations_outfile_path}")
+
+    # Create a DataFrame
+    data = {
+        'dataloader_index': all_indices,
+        'filename': all_filenames,
+        'object_id': all_tracks,
+    }
+    other_df = pd.DataFrame(data)
+
+    model.write_outputs(all_outputs, other_df, orientations_outfile_path)
+    print(f"Final angles saved to {orientations_outfile_path}")
 
     # The resize argument in generate_video_with_labels can be either a ratio or a pixel width
     if args.resize_ratio:
@@ -132,7 +171,7 @@ def main():
         print(f"Generating prediction video...")
 
         results_file_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
-        generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path)
+        generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path, orientations_outfile=orientations_outfile_path)
 
         video_filename = f"{input_name}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename

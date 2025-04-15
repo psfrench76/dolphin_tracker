@@ -1,5 +1,6 @@
 # Default configurations for tracking and video generation
 default_detector: 'saves/pretrained/e31_detector.pt' # Relative to storage_root
+default_orientation_model: 'runs/train/orientations/exp43/bal2o_firstpass/orientations_weights.pth' # Relative to storage_root
 default_tracker: 'cfg/trackers/tuning/exp31/best_tracker.yaml' # Relative to project root
 default_drone_profile: 'dji_phantom_4_pro_v2' # The default drone profile to use. Configurations located in drone_profile_dir
 default_video_resize_ratio: 0.25
