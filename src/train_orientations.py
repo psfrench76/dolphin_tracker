@@ -2,7 +2,6 @@ import argparse
 from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
-from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
 from utils.inc.orientation_network import OrientationResNet
@@ -50,19 +49,13 @@ def main():
     device, num_workers = get_device_and_workers()
     set_seed(0)
 
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
     # Ultralytics likes the dataset to point to the "images" folder, but I don't like that. In the interest of
     # maintaining the config format, I will .parent them.
     train_data_path = (dataset_root_dir / data_config['train']).parent
     val_data_path = (dataset_root_dir / data_config['val']).parent
 
-    train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path, transform=transform)
-    val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path, transform=transform)
+    train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path)
+    val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path)
 
     train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=num_workers)
     val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=False, num_workers=num_workers)

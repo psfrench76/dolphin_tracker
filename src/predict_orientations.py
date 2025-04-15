@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader
 
 import psutil
 import torch
-from torchvision import transforms
 
 def main():
     parser = argparse.ArgumentParser(description="Predict orientations.")
@@ -36,14 +35,7 @@ def main():
 
     print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        # Normalize to mean and standard deviations of RGB values for ImageNet
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, transform=transform, annotations=tracking_results, images_index_file=images_index_file)
+    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, annotations=tracking_results, images_index_file=images_index_file)
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
 
     model = OrientationResNet()
