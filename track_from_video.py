@@ -40,6 +40,8 @@ def main():
     parser.add_argument('--altitude', '-a', type=float,
                         help="Manual altitude in meters for the full video, for converting pixels to meters in "
                              "output.csv. This can take the place of an SRT file if one is missing.")
+    parser.add_argument('--output', '-o', type=Path,
+                        help="Path to the output directory. Default is output/tracker.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -103,7 +105,13 @@ def main():
 
         print(f"Using SRT file at {srt_path}")
 
-    output_dir_path = storage_path(f"{settings['output_dir']}/{settings['tracker_output_dir']}/{input_name}")
+    if args.output:
+        output_dir_path = args.output
+        output_file_basename = args.output.stem
+    else:
+        output_dir_path = storage_path(f"{settings['output_dir']}/{settings['tracker_output_dir']}/{input_name}")
+        output_file_basename = input_name
+
     output_dir_path.mkdir(parents=True, exist_ok=True)
     arg_outfile_path = output_dir_path / settings['args_file']
 
@@ -116,10 +124,10 @@ def main():
     with open(arg_outfile_path, "w") as f:
         yaml.dump(run_args, f)
 
-    output_filename = f"{input_name}_{settings['researcher_output_suffix']}"
+    output_filename = f"{output_file_basename}_{settings['researcher_output_suffix']}"
     output_file_path = output_dir_path / output_filename
-    tracker_results_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
-    images_index_file = output_dir_path / f"{input_name}_{settings['images_index_suffix']}"
+    tracker_results_path = output_dir_path / f"{output_file_basename}_{settings['results_file_suffix']}"
+    images_index_file = output_dir_path / f"{output_file_basename}_{settings['images_index_suffix']}"
 
     researcher_data_accumulator = DataAccumulator(bbox_type='xyxy', units='pct')
 
@@ -148,7 +156,7 @@ def main():
     print(f"\nStarting dolphin orientation prediction...\n")
     device, num_workers = get_device_and_workers()
     orientation_model_path = args.orientation_model or storage_path(settings['default_orientation_model'])
-    orientations_outfile_path = output_dir_path / f"{input_name}_{settings['orientations_results_suffix']}"
+    orientations_outfile_path = output_dir_path / f"{output_file_basename}_{settings['orientations_results_suffix']}"
 
     print(f"Predicting on dataset {dataset_path}. Loading model weights from {orientation_model_path}")
 
@@ -192,10 +200,10 @@ def main():
     if args.prediction_video:
         print(f"Generating prediction video...")
 
-        results_file_path = output_dir_path / f"{input_name}_{settings['results_file_suffix']}"
+        results_file_path = output_dir_path / f"{output_file_basename}_{settings['results_file_suffix']}"
         generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path, orientations_outfile=orientations_outfile_path)
 
-        video_filename = f"{input_name}_{settings['prediction_video_suffix']}"
+        video_filename = f"{output_file_basename}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename
         print(f"Prediction video output written to {video_path}")
         summary_log.add(f"Prediction video output written to {video_path}")
@@ -205,7 +213,7 @@ def main():
 
         generate_video_with_labels(dataset_path, output_dir_path, resize)
 
-        video_filename = f"{input_name}_{settings['gt_video_suffix']}"
+        video_filename = f"{output_file_basename}_{settings['gt_video_suffix']}"
         video_path = output_dir_path / video_filename
         print(f"Ground truth video output written to {video_path}")
         summary_log.add(f"Ground truth video output written to {video_path}")
