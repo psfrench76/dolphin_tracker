@@ -8,6 +8,7 @@ Usage: copy_images_and_labels_in_frame_range.py <source_dataset_root> <dest_data
         <end_frame> [--skip_images_without_labels]
 """
 
+
 import shutil
 import re
 import argparse
@@ -17,7 +18,8 @@ from inc.settings import settings
 # TODO: update documentation and rename this script
 # Copy images, labels, and tracks from source_dataset_root to dest_dataset_root whose frame numbers are between
 # start_frame and end_frame. The range is inclusive of the start_frame and exclusive of the end_frame.
-def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_frame, skip_images_without_labels):
+
+def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_frame, skip_images_without_labels, prefix):
     source_dataset_root_path = Path(source_dataset_root)
     dest_dataset_root_path = Path(dest_dataset_root)
 
@@ -53,23 +55,23 @@ def _copy_frame_range(source_dataset_root, dest_dataset_root, start_frame, end_f
         match = frame_id_pattern.search(source_image_file.name)
         if match:
             frame_number = int(match.group(1))
-            if start_frame <= frame_number < end_frame:
+            if (start_frame is None or frame_number >= start_frame) and (end_frame is None or frame_number < end_frame):
                 source_label_file = source_labels_path / (source_image_file.stem + '.txt')
                 source_track_file = source_tracks_path / (source_image_file.stem + '.txt')
                 source_orientation_file = source_orientations_path / (source_image_file.stem + '.txt')
                 if not skip_images_without_labels or source_label_file.exists():
-                    dest_image_file = dest_images_path / source_image_file.name
+                    dest_image_file = dest_images_path / f"{prefix}{source_image_file.name}" if prefix else dest_images_path / source_image_file.name
                     shutil.copy(source_image_file, dest_image_file)
                     if source_label_file.exists():
-                        dest_label_file = dest_labels_path / source_label_file.name
+                        dest_label_file = dest_labels_path / f"{prefix}{source_label_file.name}" if prefix else dest_labels_path / source_label_file.name
                         shutil.copy(source_label_file, dest_label_file)
                         copied_labels_count += 1
                     if source_track_file.exists():
-                        dest_track_file = dest_tracks_path / source_track_file.name
+                        dest_track_file = dest_tracks_path / f"{prefix}{source_track_file.name}" if prefix else dest_tracks_path / source_track_file.name
                         shutil.copy(source_track_file, dest_track_file)
                         copied_tracks_count += 1
                     if source_orientation_file.exists():
-                        dest_orientation_file = dest_orientations_path / source_orientation_file.name
+                        dest_orientation_file = dest_orientations_path / f"{prefix}{source_orientation_file.name}" if prefix else dest_orientations_path / source_orientation_file.name
                         shutil.copy(source_orientation_file, dest_orientation_file)
                         copied_orientations_count += 1
                     copied_frames_count += 1
@@ -93,10 +95,11 @@ if __name__ == '__main__':
         description="Copy files from input folder to output folder based on frame number range.")
     parser.add_argument('source_dataset_root', type=Path, help='Path to the input folder')
     parser.add_argument('dest_dataset_root', type=Path, help='Path to the output folder')
-    parser.add_argument('start_frame', type=int, help='Start frame number (inclusive)')
-    parser.add_argument('end_frame', type=int, help='End frame number (exclusive)')
+    parser.add_argument('--start_frame', '-s', type=int, default=None, help='Start frame number (inclusive)')
+    parser.add_argument('--end_frame', '-e', type=int, default=None, help='End frame number (exclusive)')
     parser.add_argument('--skip_images_without_labels', action='store_true', help='Skip images without labels')
+    parser.add_argument('--prefix', type=str, default='', help='Optional prefix for destination filenames')
     args = parser.parse_args()
 
     _copy_frame_range(args.source_dataset_root, args.dest_dataset_root, args.start_frame, args.end_frame,
-                      args.skip_images_without_labels)
+                      args.skip_images_without_labels, args.prefix)
