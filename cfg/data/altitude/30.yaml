@@ -1,0 +1,7 @@
+path: '../../data/altitude/30'
+train: 'train/images'
+val: 'test/images'
+test: 'test/images'
+
+nc: 1
+names: ['dolphin']
