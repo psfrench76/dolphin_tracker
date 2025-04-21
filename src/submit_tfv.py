@@ -17,7 +17,8 @@ def validate_args(dataset, model, tracker):
 @click.option('--model', required=True, help="Path to the model file.")
 @click.option('--output', required=True, help="Path to the output directory.")
 @click.option('--tracker', help="Tracker config file")
-def main(dataset, model, output, tracker):
+@click.option('-pv', is_flag=True, help="Generate prediction video.")
+def main(dataset, model, output, tracker, pv):
     validate_args(dataset, model, tracker)
 
     # Set environment variables
@@ -25,6 +26,7 @@ def main(dataset, model, output, tracker):
     os.environ['MODEL'] = model
     os.environ['OUTPUT'] = output
     os.environ['TRACKER'] = tracker if tracker else "Default"
+    os.environ['PV'] = "-pv" if pv else ""
 
     subprocess.run(["sbatch", "utils/hpc/tfv_job.sbatch"])
     print("Job submitted.")
