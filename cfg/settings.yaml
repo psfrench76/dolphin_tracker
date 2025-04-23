@@ -26,6 +26,7 @@ images_dir: 'images' # Subdirectory of all dataset directories
 labels_dir: 'labels' # Subdirectory of all dataset directories
 orientations_dir: 'orientations' # Subdirectory of dataset directories which have orientations
 tracks_dir: 'tracks' # Subdirectory of all dataset directories
+orientations_library_dir: 'cropped_images'
 dataset_split_dirs: # Subdirectories of some datasets -- only used for searching and not for saving
   - 'train'
   - 'val'

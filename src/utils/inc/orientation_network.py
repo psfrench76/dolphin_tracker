@@ -6,6 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 import numpy as np
+from torch.amp import GradScaler, autocast
 
 class OrientationResNet(nn.Module):
     def __init__(self):
@@ -23,6 +24,15 @@ class OrientationResNet(nn.Module):
         self.device = device
         self.to(device)
 
+    def freeze_layers(self, num_layers_to_freeze):
+        """
+        Freezes the first `num_layers_to_freeze` layers of the ResNet model.
+        """
+        layers = list(self.resnet.children())
+        for i, layer in enumerate(layers[:num_layers_to_freeze]):
+            for param in layer.parameters():
+                param.requires_grad = False
+
     def train_model(self, dataloader, optimizer):
         self.train()
         running_loss = 0.0
@@ -35,6 +45,29 @@ class OrientationResNet(nn.Module):
             optimizer.step()
             running_loss += loss.item() * images.size(0)
         return running_loss / len(dataloader.dataset)
+
+    def train_model_scaled(self, train_dataloader, optimizer):
+        self.train()
+        scaler = GradScaler(str(self.device))
+        total_loss = 0.0
+
+        for images, orientations, tracks, indices in train_dataloader:
+            images, orientations = images.to(self.device), orientations.to(self.device)
+
+            optimizer.zero_grad()
+
+            with autocast(str(self.device)):
+                outputs = self(images)
+                loss = self.compute_loss(outputs, orientations)
+
+            scaler.scale(loss).backward()
+
+            scaler.step(optimizer)
+            scaler.update()
+
+            total_loss += loss.item()
+
+        return total_loss / len(train_dataloader)
 
     def validate_model(self, dataloader):
         self.eval()

@@ -17,12 +17,15 @@ def main():
     parser.add_argument('--dataset', '-d', type=Path, required=True, help="Path to the dataset root directory.")
     parser.add_argument('--output_folder', '-o', type=Path, required=True, help="Path to the output folder.")
     parser.add_argument('--weights', '-w', type=Path, required=True, help="Path to the model weights file.")
+    parser.add_argument('--augment', '-a', action='store_true', help="Use data augmentation.")
+    parser.add_argument('--imgsz', '-sz', type=int, help="Image size for the model.")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
     output_folder = args.output_folder
     weights = args.weights
     outfile_path = output_folder / f"{output_folder.name}_{settings['orientations_results_suffix']}"
+    imgsz = args.imgsz if args.imgsz else 244
 
     output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -32,7 +35,7 @@ def main():
 
     print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
-    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir)
+    dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, augment=args.augment, imgsz=imgsz)
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
 
     model = OrientationResNet()
