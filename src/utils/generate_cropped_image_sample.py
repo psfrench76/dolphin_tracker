@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from inc.orientation_io import crop_image_with_bbox
+from inc.orientation_dataset import load_cropped_image
 from inc.settings import settings
 
 def main():
@@ -30,7 +30,7 @@ def main():
         bbox = list(map(float, label_line[1:5]))
 
     # Generate the cropped image
-    cropped_image = crop_image_with_bbox(image_file, bbox, 'yolo')
+    cropped_image = load_cropped_image(image_file, bbox, 'yolo')
 
     # Create the output file path
     output_file = output_folder / f"{image_file.stem}_label_{label_index}_cropped.jpg"
