@@ -1,0 +1,5 @@
+lr_start: 0.001
+lr_final_factor: 0.01
+num_epochs: 100
+batch_size: 64
+freeze: 1
