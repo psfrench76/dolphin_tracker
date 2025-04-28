@@ -104,7 +104,11 @@ class DolphinTracker:
             gt_df.reset_index(inplace=True)
             pred_df.reset_index(inplace=True)
 
-            images_index_df = pd.read_csv(self.images_index_file_path, header=None)
+            if self.images_index_file_path.stat().st_size != 0:
+                images_index_df = pd.read_csv(self.images_index_file_path, header=None)
+            else:
+                images_index_df = pd.DataFrame(columns=['file_stem'])
+
             gt_images_index_df = pd.read_csv(self.gt_images_index_file_path, header=None)
 
             images_index_df.columns = ['file_stem']
