@@ -106,72 +106,72 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
 
         frame_bboxes = all_bboxes[all_bboxes['file_stem'] == image_file.stem]
 
+        if not ignore_bbox:
+            # Draw bounding boxes and labels
+            for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
+                if np.isnan(row['id']):
+                    continue
 
-        # Draw bounding boxes and labels
-        for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
-            if np.isnan(row['id']):
-                continue
-
-            if oriented_bbox:
-                """
-                Note: Oriented bounding box features are incomplete. See detailed comments in src/track.py and
-                src/utils/inc/data_conversion.py for more information. It's likely that some debugging will be needed
-                as newer features haven't been tested against the deprecated OBB code.
-                """
-                # Get oriented bounding box information from row
-                bbox = _get_obb_bbox_from_points(row['x1'], row['y1'], row['x2'], row['y2'], row['x3'], row['y3'],
-                                                 row['x4'], row['y4'], new_width, new_height)
-            else:
-                # Get bounding box information from row
-                bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width, new_height)
-
-            track_id = int(row['id'])
-
-            # Assign a color to each track ID
-            if track_id not in track_colors:
-                track_colors[track_id] = colors[len(track_colors) % len(colors)]
-
-            if oriented_bbox:
-                # Draw oriented bounding box
-                cv2.line(frame, (bbox['x1'], bbox['y1']), (bbox['x2'], bbox['y2']), track_colors[track_id], 1,
-                         cv2.LINE_AA)
-                cv2.line(frame, (bbox['x2'], bbox['y2']), (bbox['x3'], bbox['y3']), track_colors[track_id], 1,
-                         cv2.LINE_AA)
-                cv2.line(frame, (bbox['x3'], bbox['y3']), (bbox['x4'], bbox['y4']), track_colors[track_id], 1,
-                         cv2.LINE_AA)
-                cv2.line(frame, (bbox['x4'], bbox['y4']), (bbox['x1'], bbox['y1']), track_colors[track_id], 1,
-                         cv2.LINE_AA)
-
-                track_label_x = min(bbox['x1'], bbox['x2'], bbox['x3'], bbox['x4'])
-                track_label_y = min(bbox['y1'], bbox['y2'], bbox['y3'], bbox['y4']) - text_vertical_margin
-                if track_label_y - font_height - text_vertical_margin < 0:
-                    track_label_y = max(bbox['y1'], bbox['y2'], bbox['y3'],
-                                        bbox['y4']) + text_vertical_margin + font_height
-
-            else:
-                # Draw bounding box, center point, and track ID
-                cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
-                              (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
-
-                # Get track label location
-                track_label_x = bbox['x_top_left']
-                track_label_y = bbox['y_top_left'] - text_vertical_margin
-                if track_label_y - font_height - text_vertical_margin < 0:
-                    track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
-
-            if oriented_bbox or 'angle' in row:
-                center_point = (bbox['center_x'], bbox['center_y'])
-                if 'orientation_x' in bbox and 'orientation_y' in bbox:
-                    arrow_point = (bbox['orientation_x'], bbox['orientation_y'])
+                if oriented_bbox:
+                    """
+                    Note: Oriented bounding box features are incomplete. See detailed comments in src/track.py and
+                    src/utils/inc/data_conversion.py for more information. It's likely that some debugging will be needed
+                    as newer features haven't been tested against the deprecated OBB code.
+                    """
+                    # Get oriented bounding box information from row
+                    bbox = _get_obb_bbox_from_points(row['x1'], row['y1'], row['x2'], row['y2'], row['x3'], row['y3'],
+                                                     row['x4'], row['y4'], new_width, new_height)
                 else:
-                    arrow_point = _get_orientation_point(row['angle'], bbox)
-                if arrow_point is not None:
-                    cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
+                    # Get bounding box information from row
+                    bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width, new_height)
+
+                track_id = int(row['id'])
+
+                # Assign a color to each track ID
+                if track_id not in track_colors:
+                    track_colors[track_id] = colors[len(track_colors) % len(colors)]
+
+                if oriented_bbox:
+                    # Draw oriented bounding box
+                    cv2.line(frame, (bbox['x1'], bbox['y1']), (bbox['x2'], bbox['y2']), track_colors[track_id], 1,
+                             cv2.LINE_AA)
+                    cv2.line(frame, (bbox['x2'], bbox['y2']), (bbox['x3'], bbox['y3']), track_colors[track_id], 1,
+                             cv2.LINE_AA)
+                    cv2.line(frame, (bbox['x3'], bbox['y3']), (bbox['x4'], bbox['y4']), track_colors[track_id], 1,
+                             cv2.LINE_AA)
+                    cv2.line(frame, (bbox['x4'], bbox['y4']), (bbox['x1'], bbox['y1']), track_colors[track_id], 1,
+                             cv2.LINE_AA)
+
+                    track_label_x = min(bbox['x1'], bbox['x2'], bbox['x3'], bbox['x4'])
+                    track_label_y = min(bbox['y1'], bbox['y2'], bbox['y3'], bbox['y4']) - text_vertical_margin
+                    if track_label_y - font_height - text_vertical_margin < 0:
+                        track_label_y = max(bbox['y1'], bbox['y2'], bbox['y3'],
+                                            bbox['y4']) + text_vertical_margin + font_height
+
+                else:
+                    # Draw bounding box, center point, and track ID
+                    cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
+                                  (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
+
+                    # Get track label location
+                    track_label_x = bbox['x_top_left']
+                    track_label_y = bbox['y_top_left'] - text_vertical_margin
+                    if track_label_y - font_height - text_vertical_margin < 0:
+                        track_label_y = bbox['y_top_left'] + bbox['h'] + text_vertical_margin + font_height
+
+                if oriented_bbox or 'angle' in row:
+                    center_point = (bbox['center_x'], bbox['center_y'])
+                    if 'orientation_x' in bbox and 'orientation_y' in bbox:
+                        arrow_point = (bbox['orientation_x'], bbox['orientation_y'])
+                    else:
+                        arrow_point = _get_orientation_point(row['angle'], bbox)
+                    if arrow_point is not None:
+                        cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
 
 
-            cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
-            cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX, font_scale,
-                        track_colors[track_id], 1, cv2.LINE_AA)
+                cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
+                cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX, font_scale,
+                            track_colors[track_id], 1, cv2.LINE_AA)
 
         # Add frame ID to the lower left corner
         cv2.putText(frame, f'Frame: {image_file.name}', (10, new_height - 10), cv2.FONT_HERSHEY_DUPLEX, font_scale,

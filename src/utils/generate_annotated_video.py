@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--ignore_bbox', '-ib', action='store_true',)
     args = parser.parse_args()
 
-    generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_path, args.orientations_outfile, sf=args.start_frame, ef=args.end_frame)
+    generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_path, args.orientations_outfile, sf=args.start_frame, ef=args.end_frame, ignore_bbox=args.ignore_bbox)
 
 
 if __name__ == '__main__':
