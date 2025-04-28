@@ -18,7 +18,6 @@ from .settings import settings
 from .oriented_bounding_boxes import get_orientation_arrow_point
 
 
-
 # Args:
 # dataset_root_path (Path): Path to the dataset root directory. This directory should contain an images directory
 # with individual frames, and optionally a labels directory with ground truth labels in YOLO format. If no bbox_path
@@ -29,8 +28,10 @@ from .oriented_bounding_boxes import get_orientation_arrow_point
 # bbox_path (Path): Path to the bounding box prediction file (MOT15 format). If provided, the function will use this
 # file to generate the video. If not provided, the function will look for labels and tracks in the dataset root
 # directory.
-# orientations_outfile (Path): Path to the orientations output file (optional). This is an output file from the orientations neural network.
-def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None, sf=0, ef=-1, ignore_bbox=False):
+# orientations_outfile (Path): Path to the orientations output file (optional). This is an output file from the
+# orientations neural network.
+def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None,
+                               sf=0, ef=-1, ignore_bbox=False):
     if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
@@ -53,7 +54,6 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     else:
         raise ValueError(
             "Bounding box file must be a .txt file. Leave out argument to use dataset ground truth labels and tracks.")
-
 
     # Get image files
     image_folder = dataset_root_path / settings['images_dir']
@@ -115,7 +115,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                 if oriented_bbox:
                     """
                     Note: Oriented bounding box features are incomplete. See detailed comments in src/track.py and
-                    src/utils/inc/data_conversion.py for more information. It's likely that some debugging will be needed
+                    src/utils/inc/data_conversion.py for more information. It's likely that some debugging will be 
+                    needed
                     as newer features haven't been tested against the deprecated OBB code.
                     """
                     # Get oriented bounding box information from row
@@ -123,7 +124,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                                                      row['x4'], row['y4'], new_width, new_height)
                 else:
                     # Get bounding box information from row
-                    bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width, new_height)
+                    bbox = _get_bbox_from_yolo_coordinates(row['x'], row['y'], row['w'], row['h'], new_width,
+                                                           new_height)
 
                 track_id = int(row['id'])
 
@@ -151,7 +153,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                 else:
                     # Draw bounding box, center point, and track ID
                     cv2.rectangle(frame, (bbox['x_top_left'], bbox['y_top_left']),
-                                  (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1, cv2.LINE_AA)
+                                  (bbox['x_bottom_right'], bbox['y_bottom_right']), track_colors[track_id], 1,
+                                  cv2.LINE_AA)
 
                     # Get track label location
                     track_label_x = bbox['x_top_left']
@@ -168,10 +171,9 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
                     if arrow_point is not None:
                         cv2.arrowedLine(frame, center_point, arrow_point, track_colors[track_id], 1, cv2.LINE_AA)
 
-
                 cv2.circle(frame, (bbox['center_x'], bbox['center_y']), 1, track_colors[track_id], -1)
-                cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX, font_scale,
-                            track_colors[track_id], 1, cv2.LINE_AA)
+                cv2.putText(frame, f'ID: {track_id}', (track_label_x, track_label_y), cv2.FONT_HERSHEY_DUPLEX,
+                            font_scale, track_colors[track_id], 1, cv2.LINE_AA)
 
         # Add frame ID to the lower left corner
         cv2.putText(frame, f'Frame: {image_file.name}', (10, new_height - 10), cv2.FONT_HERSHEY_DUPLEX, font_scale,
@@ -228,7 +230,8 @@ def _get_bboxes_from_txt(csv_file):
             f"Bounding box file {csv_file} does not have the correct number of columns. Found {bboxes.shape[1]}, "
             f"expected {len(settings['bbox_file_columns'])} or {len(settings['obb_file_columns'])}.")
 
-    images_index_filename = csv_file.parent / csv_file.name.replace(settings['results_file_suffix'], settings['images_index_suffix'])
+    images_index_filename = csv_file.parent / csv_file.name.replace(settings['results_file_suffix'],
+                                                                    settings['images_index_suffix'])
     images_index = pd.read_csv(images_index_filename, header=None)
     images_index.columns = ['file_stem']
 
