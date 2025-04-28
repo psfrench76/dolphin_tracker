@@ -30,7 +30,7 @@ from .oriented_bounding_boxes import get_orientation_arrow_point
 # file to generate the video. If not provided, the function will look for labels and tracks in the dataset root
 # directory.
 # orientations_outfile (Path): Path to the orientations output file (optional). This is an output file from the orientations neural network.
-def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None):
+def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None, sf=0, ef=-1, ignore_bbox=False):
     if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
@@ -91,11 +91,21 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     # Iterate over each frame
     for image_file in tqdm(image_files, desc="Processing frames", unit="frame"):
 
+        if ef != -1 or sf != 0:
+            match = re.search(settings['frame_number_regex'], image_file.name)
+            if match:
+                frame_number = int(match.group(1))
+                if sf != 0 and frame_number < sf:
+                    continue
+                if ef != -1 and frame_number > ef:
+                    continue
+
         # Get frame and resize
         frame = cv2.imread(str(image_file))
         frame = cv2.resize(frame, (new_width, new_height))
 
         frame_bboxes = all_bboxes[all_bboxes['file_stem'] == image_file.stem]
+
 
         # Draw bounding boxes and labels
         for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
@@ -317,7 +327,9 @@ def _get_orientations_from_txt_and_merge(orientations_file, bboxes):
         return bboxes
     else:
         orientations = pd.read_csv(orientations_file, sep=',', index_col=None)
-        bboxes = pd.concat([bboxes, orientations[['angle']]], axis=1)
+        orientations.rename({'filename': 'file_stem', 'object_id': 'id'}, axis=1, inplace=True)
+        # bboxes = pd.concat([bboxes, orientations[['angle']]], axis=1)
+        bboxes = bboxes.merge(orientations, on=['file_stem', 'id'], how='left')
         return bboxes
 
 
