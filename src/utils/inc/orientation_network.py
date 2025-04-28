@@ -7,14 +7,27 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 from torch.amp import GradScaler, autocast
+from .reporting import OrientationMetrics
 
 class OrientationResNet(nn.Module):
-    def __init__(self):
+    def __init__(self, weights=None, device=None):
         super(OrientationResNet, self).__init__()
-        self.resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
-        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 2)
+        self.device = device
+        load_args = {'weights_only': True}
+
+        if self.device is not None:
+            self.to(self.device)
+            load_args['map_location'] = device
+
+        if weights is not None:
+            self.resnet = models.resnet18()
+            self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 2)
+            self.load_state_dict(torch.load(weights, **load_args))
+        else:
+            self.resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
+            self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 2)
+
         self.loss_fn = nn.MSELoss()
-        self.device = None
 
     def forward(self, x):
         x = self.resnet(x)
@@ -94,6 +107,42 @@ class OrientationResNet(nn.Module):
                 all_tracks.append(tracks)
         return torch.cat(all_outputs, dim=0), torch.cat(all_indices, dim=0).cpu().numpy(), torch.cat(all_tracks, dim=0).cpu().numpy()
 
+    def evaluate(self, dataloader, outfile_path):
+        self.eval()
+        all_outputs = []
+        all_indices = []
+        all_tracks = []
+        all_gt_orientations = []
+        with torch.no_grad():
+            for images, orientations, tracks, idxs in tqdm(dataloader, desc="Predicting orientations", unit="batch"):
+                images = images.to(self.device)
+                outputs = self(images)
+                all_outputs.append(outputs.cpu())
+                all_indices.append(idxs)
+                all_tracks.append(tracks)
+                all_gt_orientations.append(orientations)
+
+        all_outputs = torch.cat(all_outputs, dim=0)
+        all_gt_orientations = torch.cat(all_gt_orientations, dim=0).cpu().numpy()
+        all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
+        all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
+
+        all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
+
+        data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
+        other_df = pd.DataFrame(data)
+        pred_df = self.write_outputs(all_outputs, outfile_path, other_df)
+        print(f"Final angles saved to {outfile_path}")
+
+        gt_data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks,
+                   'x_val': all_gt_orientations[:, 0], 'y_val': all_gt_orientations[:, 1]}
+        gt_df = pd.DataFrame(gt_data)
+        gt_df['angle'] = self.calculate_angles_pd(gt_df['x_val'], gt_df['y_val'])
+
+        om = OrientationMetrics(pred_df, gt_df)
+        om.calculate_metrics()
+        return om
+
     def calculate_angles(self, outputs):
         x_val, y_val = outputs[:, 0], outputs[:, 1]
         angle = torch.atan2(y_val, x_val) * (180 / torch.pi)  # Convert radians to degrees
@@ -109,7 +158,7 @@ class OrientationResNet(nn.Module):
 
     # TODO: make this prettier, probably have first two columns filename and object ID. May need to build this into a separate IO module for the sake of sanity
     # other_data should already be a pandas dataframe, with column names
-    def write_outputs(self, outputs, other_data, file_path):
+    def write_outputs(self, outputs, file_path, other_data=None):
         angles = self.calculate_angles(outputs)
         outputs = outputs.cpu()
         angles = angles.unsqueeze(1).cpu()
@@ -117,19 +166,10 @@ class OrientationResNet(nn.Module):
         all_output = torch.cat([angles, outputs], dim=1)
         df = pd.DataFrame(all_output.numpy())
         df.columns = ['angle', 'x_val', 'y_val']
-        df = pd.concat([df, other_data], axis=1)
+        if other_data is not None:
+            df = pd.concat([df, other_data], axis=1)
         df.sort_values(by=['filename', 'object_id'], inplace=True)
 
         df.to_csv(file_path, index=False, header=True)
         return df
 
-    def get_ground_truth(self, dataset):
-        gt_data = []
-        for i in range(len(dataset)):
-            filename, orientation, track, idx = dataset.get_ground_truth_label(i)
-            gt_data.append({'filename': Path(filename).stem, 'x_val': orientation[0], 'y_val': orientation[1],
-                            'object_id': track, 'dataloader_index': idx})
-
-        gt_df = pd.DataFrame(gt_data)
-        gt_df['angle'] = self.calculate_angles_pd(gt_df['x_val'], gt_df['y_val'])
-        return gt_df

@@ -47,33 +47,11 @@ def main():
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, augment=args.augment, imgsz=imgsz)
     dataloader = DataLoader(dataset, **dataloader_args)
 
-    model = OrientationResNet()
+    model = OrientationResNet(weights=weights, device=device)
     model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
     model.set_device(device)
 
-    all_outputs, all_indices, all_tracks = model.predict(dataloader)
-    all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
-
-    print(f"Predictions complete. Saving to {outfile_path}")
-
-    # Create a DataFrame
-    data = {
-        'dataloader_index': all_indices,
-        'filename': all_filenames,
-        'object_id': all_tracks,
-    }
-    other_df = pd.DataFrame(data)
-
-    pred_df = model.write_outputs(all_outputs, other_df, outfile_path)
-    print(f"Final angles saved to {outfile_path}")
-
-    # TODO: Evaluation doesn't work with data augmentation. Needs to be reimplemented. I think get_ground_truth is the problem.
-
-    # Evaluate the predictions
-    gt_df = model.get_ground_truth(dataset)
-
-    om = OrientationMetrics(pred_df, gt_df)
-    om.calculate_metrics()
+    om = model.evaluate(dataloader, outfile_path)
 
     metrics_file = output_folder / f"{output_folder.name}_{settings['orientations_metrics_suffix']}"
     line_results_file = output_folder / f"{output_folder.name}_{settings['orientations_line_results_suffix']}"

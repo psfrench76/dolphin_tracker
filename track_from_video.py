@@ -180,7 +180,7 @@ def main():
     }
     other_df = pd.DataFrame(data)
 
-    model.write_outputs(all_outputs, other_df, orientations_outfile_path)
+    model.write_outputs(all_outputs, orientations_outfile_path, other_df)
     print(f"Final angles saved to {orientations_outfile_path}")
 
     researcher_data_accumulator.load_orientations(orientations_outfile_path)

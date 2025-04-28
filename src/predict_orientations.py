@@ -55,7 +55,7 @@ def main():
     }
     other_df = pd.DataFrame(data)
 
-    model.write_outputs(all_outputs, other_df, outfile_path)
+    model.write_outputs(all_outputs, outfile_path, other_df)
     print(f"Final angles saved to {outfile_path}")
 
 if __name__ == "__main__":
