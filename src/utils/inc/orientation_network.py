@@ -103,6 +103,8 @@ class OrientationResNet(nn.Module):
         return np.arctan2(y_col, x_col) * (180 / np.pi)
 
     def compute_loss(self, predictions, targets):
+        # print(f"Predictions: {predictions}")
+        # print(f"Targets: {targets}")
         return self.loss_fn(predictions, targets)
 
     # TODO: make this prettier, probably have first two columns filename and object ID. May need to build this into a separate IO module for the sake of sanity

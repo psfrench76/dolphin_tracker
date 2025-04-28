@@ -1,14 +1,16 @@
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 from pathlib import Path
 from .settings import settings
 import random
 import hashlib
+import time
 from collections import OrderedDict
 import sys
 import multiprocessing
+import torchvision.transforms.functional as tf
 
 class DolphinOrientationDataset(Dataset):
     shared_cache = None
@@ -42,6 +44,7 @@ class DolphinOrientationDataset(Dataset):
             self.images_index[image_file.stem] = image_file
 
         self.image_library = {}
+        self.imgsz = imgsz
 
         self.orientations_index = {}
         self.orientations_dir = self.dataset_root_path / settings['orientations_dir']
@@ -69,7 +72,16 @@ class DolphinOrientationDataset(Dataset):
             self.annotations = self._load_annotations_from_dataset_dir(self.dataset_root_path)
 
         self.transform = transforms.Compose([
-            transforms.Resize((imgsz, imgsz)),
+            transforms.Resize(size=self.imgsz-1, max_size=self.imgsz),
+            # transforms.Lambda(lambda img: tf.pad(img, (0, 0, imgsz - img.size[0], imgsz - img.size[1]), fill=0)),  # Black padding
+
+            # transforms.Pad(padding=lambda img: ((imgsz - img.size[0]) // 2,  # L/R padding
+            #                                     (imgsz - img.size[1]) // 2,  # U/D padding
+            #     ), fill=0,  # Black padding
+            # ),
+            transforms.CenterCrop(self.imgsz),  # Center crop to square (handles padding)
+
+            # transforms.Resize((self.imgsz, self.imgsz)),
             transforms.ToTensor(),
             # Normalize to mean and standard deviations of RGB values for ImageNet
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -81,20 +93,13 @@ class DolphinOrientationDataset(Dataset):
     def __getitem__(self, idx):
 
         cache = DolphinOrientationDataset.shared_cache
-        cache_size = DolphinOrientationDataset.shared_cache_size
-        cache_stats = DolphinOrientationDataset.cache_stats
-        cache_keys = DolphinOrientationDataset.shared_cache_keys
+        annotation = self.annotations[idx]
+        img_scale = None
 
         if idx in cache:
-            # Move accessed item to the end to mark it as recently used
-            image, orientation, track = cache[idx]
+            image, orientation, track = self._cache_load(idx)
 
-            cache_keys.remove(idx)
-            cache_keys.append(idx)
-
-            cache_stats['hits'] += 1
         else:
-            annotation = self.annotations[idx]
             orientation = annotation['orientation']
             track = annotation['track']
             img_path = annotation['image']
@@ -106,25 +111,82 @@ class DolphinOrientationDataset(Dataset):
             else:
                 orientation = torch.tensor(orientation, dtype=torch.float32)
 
-            if self.transform:
-                image = self.transform(image)
+            img_max_dim = max(image.size)
+            img_scale = self.imgsz / img_max_dim
+            orientation = orientation * img_scale
 
-            new_item = (image, orientation, track)
-            new_item_size = sys.getsizeof(image) + sys.getsizeof(orientation) + sys.getsizeof(track)
-            while cache_size.value + new_item_size > self.cache_limit_mb * 1024 * 1024:
-                evict_key = cache_keys.pop(0)
-                evicted_item = cache.pop(evict_key)
-                evicted_item_size = sum(sys.getsizeof(x) for x in evicted_item)
-                cache_size.value -= evicted_item_size
-            cache[idx] = new_item
-            cache_keys.append(idx)
-            cache_size.value += new_item_size
-            cache_stats['misses'] += 1
+            # print(f"Rescaling image to: {self.imgsz}, Orientation: {orientation}")
+
+            image_tensor = self.transform(image)
+            image.close()
+            image = image_tensor
+
+
+
+            self._cache_insert(image, orientation, track, idx)
+
+        # print(f"\nAugmenting image {annotation}")
+        # print(f"Scaled image by {img_scale}")
+        # self._save_image_from_tensor(image, f"before_{idx}.jpg")
+        # print(f"Image dimensions: {image.size()}, Orientation: {orientation}, Track: {track}, Index: {idx}")
 
         if self.augment:
-            image, orientation, bbox = self._apply_augmentation(image, orientation, self.annotations[idx]['bbox'])
+            image, orientation = self._apply_augmentation(image, orientation)
+
+        # print(f"Done processing image {annotation}")
+        # self._save_image_from_tensor(image, f"after_{idx}.jpg")
+        # print(f"Image dimensions: {image.size()}, Orientation: {orientation}, Track: {track}, Index: {idx}")
+
+        # print(f"Image dimensions: {image.size}, Orientation: {orientation}, Track: {track}, Index: {idx}")
+
 
         return image, orientation, track, idx
+
+    def _save_image_from_tensor(self, image_tensor, save_path):
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+        denormalized_image = image_tensor * std + mean  # Reverse normalization
+        pil_image = tf.to_pil_image(denormalized_image.clamp(0, 1))  # Clamp values to [0, 1] for valid image range
+        pil_image.save(save_path)
+
+    def _cache_insert(self, image, orientation, track, idx):
+        cache = DolphinOrientationDataset.shared_cache
+        cache_size = DolphinOrientationDataset.shared_cache_size
+        cache_keys = DolphinOrientationDataset.shared_cache_keys
+        cache_stats = DolphinOrientationDataset.cache_stats
+
+        new_item = (image.clone(), orientation.clone(), track)
+        new_item_size = sys.getsizeof(image) + sys.getsizeof(orientation) + sys.getsizeof(track)
+        while cache_size.value + new_item_size > self.cache_limit_mb * 1024 * 1024:
+            evict_key = cache_keys.pop(0)
+            evicted_item = cache.pop(evict_key)
+            evicted_item_size = sum(sys.getsizeof(x) for x in evicted_item)
+            cache_size.value -= evicted_item_size
+        cache[idx] = new_item
+        cache_keys.append(idx)
+        cache_size.value += new_item_size
+
+        cache_stats['misses'] += 1
+        # print(f"Cache size: {cache_size.value / 1024 / 1024:.2f} MB, Cache hits: {cache_stats['hits']}, Cache misses: {cache_stats['misses']}")
+
+
+    def _cache_load(self, idx):
+        cache_keys = DolphinOrientationDataset.shared_cache_keys
+        cache = DolphinOrientationDataset.shared_cache
+        cache_stats = DolphinOrientationDataset.cache_stats
+
+        image, orientation, track = cache[idx]
+
+        cache_keys.remove(idx)
+        cache_keys.append(idx)
+
+        cache_stats['hits'] += 1
+
+        return image.clone(), orientation.clone(), track
+
+    def get_cache_size_mb(self):
+        cache_size = DolphinOrientationDataset.shared_cache_size
+        return cache_size.value / 1024 / 1024
 
     def get_image_path(self, idx):
         return self.annotations[idx]['image']
@@ -138,36 +200,83 @@ class DolphinOrientationDataset(Dataset):
 
         library_image_name = f"{image_path.stem}_{bbox_hash}{image_path.suffix}"
         library_image_path = self.dataset_root_path / settings['orientations_library_dir'] / library_image_name
+        library_image_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if image_path not in self.image_library:
-            self.image_library[image_path] = {}
+        # image = None
 
-        if bbox_hash in self.image_library[image_path]:
-            library_image_path = self.image_library[image_path][bbox_hash]
-        elif library_image_path.exists():
-            self.image_library[image_path][bbox_hash] = library_image_path
+        # if image_path not in self.image_library:
+        #     self.image_library[image_path] = {}
+
+        # if bbox_hash in self.image_library[image_path]:
+        #     image = self.image_library[image_path][bbox_hash]
+        #     print(f"Image found in library: {image_path} with bbox {bbox_hash}, loading from internal cache")
+        #     return image
+        if library_image_path.exists():
+            image = None
+            for i in range (0, 5):
+                try:
+                    # print(f"Trying to open image {library_image_path}, attempt {i+1}")
+                    image = Image.open(library_image_path).convert("RGB")
+                    break
+                except UnidentifiedImageError:
+                    if library_image_path.stat().st_size == 0:
+                        print(f"Image {library_image_path} is empty, reloading from source and resaving...")
+                        cropped_image = load_cropped_image(image_path, bbox, bbox_format)
+                        return cropped_image
+
+                    time.sleep(0.5)
+
+            if image is None:
+                raise UnidentifiedImageError(f"Tried 5 times and failed; Could not open image {library_image_path}")
+
+            # image = Image.open(library_image_path).convert("RGB")
+            # self.image_library[image_path][bbox_hash] = image
+            # print(f"Image found: {image_path} with bbox {bbox_hash}, loading from file {library_image_path}")
+            return image
         else:
             cropped_image = load_cropped_image(image_path, bbox, bbox_format)
-            library_image_path.parent.mkdir(parents=True, exist_ok=True)
-
+            # print(f"No image found: {image_path} with bbox {bbox_hash}, saving image to file {library_image_path}")
             cropped_image.save(library_image_path)
-            self.image_library[image_path][bbox_hash] = library_image_path
+            # self.image_library[image_path][bbox_hash] = cropped_image
+            # image = cropped_image
+            return cropped_image
 
-        return Image.open(library_image_path).convert("RGB")
+        # for i in range (0, 5):
+        #     try:
+        #         print(f"Trying to open image {library_image_path}, attempt {i+1}")
+        #         image = Image.open(library_image_path).convert("RGB")
+        #     except UnidentifiedImageError:
+        #         time.sleep(0.5)
+        #
+        # if image is None:
+        #     raise UnidentifiedImageError(f"Tried 5 times and failed; Could not open image {library_image_path}")
+        #
+        # return image
 
-    def _apply_augmentation(self, image, orientation, bbox):
+    def _apply_augmentation(self, image, orientation):
         # Randomly apply L/R or U/D flips
-        if random.random() < 0.5:  # 50% chance for L/R flip
-            image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            bbox[0] = 1.0 - bbox[0]  # Flip x-center
+        lr_chance = 0.5
+        ud_chance = 0.5
+
+        if random.random() < lr_chance:  # 50% chance for L/R flip
+            # print(f"Before applying X augmentation: {image.size()}, Orientation: {orientation}")
+            image = tf.hflip(image)
+            # # image = image.transpose(Image.FLIP_LEFT_RIGHT)
+            # bbox = (1.0 - x, y, w, h)
             orientation[0] = -orientation[0]  # Flip x-component of orientation
+            # print(f"After applying X augmentation: {image.size()}, Orientation: {orientation}")
 
-        if random.random() < 0.5:  # 50% chance for U/D flip
-            image = image.transpose(Image.FLIP_TOP_BOTTOM)
-            bbox[1] = 1.0 - bbox[1]  # Flip y-center
+        if random.random() < ud_chance:  # 50% chance for U/D flip
+            # print(f"Before applying Y augmentation: {image.size()}, Orientation: {orientation}")
+            image = tf.vflip(image)
+            # image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            # bbox = (x, 1.0 - y, w, h)  # Flip y-center
             orientation[1] = -orientation[1]  # Flip y-component of orientation
+            # print(f"After applying Y augmentation: {image.size()}, Orientation: {orientation}")
 
-        return image, orientation, bbox
+
+
+        return image, orientation
 
     def _load_annotations_from_dataset_dir(self, dataset_root_path):
         annotations = []

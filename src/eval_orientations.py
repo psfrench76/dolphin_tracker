@@ -33,10 +33,19 @@ def main():
 
     device, num_workers = get_device_and_workers(split=False)
 
+    dataloader_args = {
+        'batch_size': 256,
+        'num_workers': num_workers,
+        'pin_memory': True,
+        'shuffle': True,
+        'prefetch_factor': 4,
+        #'persistent_workers': True,
+    }
+
     print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, augment=args.augment, imgsz=imgsz)
-    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
+    dataloader = DataLoader(dataset, **dataloader_args)
 
     model = OrientationResNet()
     model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
@@ -57,6 +66,8 @@ def main():
 
     pred_df = model.write_outputs(all_outputs, other_df, outfile_path)
     print(f"Final angles saved to {outfile_path}")
+
+    # TODO: Evaluation doesn't work with data augmentation. Needs to be reimplemented. I think get_ground_truth is the problem.
 
     # Evaluate the predictions
     gt_df = model.get_ground_truth(dataset)

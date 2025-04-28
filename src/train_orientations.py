@@ -62,8 +62,10 @@ def main():
 
     imgsz = int(hp['imgsz'])
 
-    train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path, augment=args.augment, imgsz=imgsz)
-    val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path, augment=args.augment, imgsz=imgsz)
+    augment = args.augment or bool(hp['augment'])
+
+    train_dataset = DolphinOrientationDataset(dataset_root_dir=train_data_path, augment=augment, imgsz=imgsz)
+    val_dataset = DolphinOrientationDataset(dataset_root_dir=val_data_path, augment=augment, imgsz=imgsz)
 
     dataloader_args = {
         'batch_size': int(hp['batch_size']),
@@ -133,7 +135,7 @@ def main():
 
         end_time = time.time()  # End time
         epoch_duration = end_time - start_time
-        print(f"Epoch {e}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}. Duration: {epoch_duration:.2f} seconds")
+        print(f"Epoch {e}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}. Duration: {epoch_duration:.2f} seconds. Train cache size: {train_dataset.get_cache_size_mb():.2f} MB")
         # print(f"Train cache stats: {train_dataset.cache_stats}; size: {DolphinOrientationDataset.shared_cache_size.value / 1024 / 1024:.2f} MB")
         # print(f"Val cache stats: {val_dataset.cache_stats}; size: {DolphinOrientationDataset.shared_cache_size.value / 1024 / 1024:.2f} MB")
 
