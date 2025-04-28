@@ -142,16 +142,7 @@ def main():
     torch.save(model.state_dict(), weights_file_path)
     print(f"Model saved to {weights_file_path}")
 
-    all_outputs, all_indices, all_tracks = model.predict(val_dataloader)
-    all_filenames = [str(val_dataset.get_image_path(idx).stem) for idx in all_indices]
-
-    print(f"Predictions complete. Saving to {outfile_path}")
-
-    data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks}
-    other_df = pd.DataFrame(data)
-
-    model.write_outputs(all_outputs, outfile_path, other_df)
-    print(f"Final angles saved to {outfile_path}")
+    pred_df = model.predict(val_dataloader, outfile_path)
 
     # Close the TensorBoard writer
     writer.close()

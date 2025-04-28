@@ -93,7 +93,7 @@ class OrientationResNet(nn.Module):
                 running_loss += loss.item() * images.size(0)
         return running_loss / len(dataloader.dataset)
 
-    def predict(self, dataloader):
+    def predict(self, dataloader, outfile_path):
         self.eval()
         all_outputs = []
         all_indices = []
@@ -105,7 +105,19 @@ class OrientationResNet(nn.Module):
                 all_outputs.append(outputs.cpu())
                 all_indices.append(idxs)
                 all_tracks.append(tracks)
-        return torch.cat(all_outputs, dim=0), torch.cat(all_indices, dim=0).cpu().numpy(), torch.cat(all_tracks, dim=0).cpu().numpy()
+
+        all_outputs = torch.cat(all_outputs, dim=0)
+        all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
+        all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
+
+        all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
+
+        data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
+        other_df = pd.DataFrame(data)
+        pred_df = self.write_outputs(all_outputs, outfile_path, other_df)
+        print(f"Final angles saved to {outfile_path}")
+
+        return pred_df
 
     def evaluate(self, dataloader, outfile_path):
         self.eval()

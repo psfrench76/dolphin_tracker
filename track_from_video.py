@@ -167,21 +167,7 @@ def main():
     model.load_state_dict(torch.load(orientation_model_path, map_location=device, weights_only=True))
     model.set_device(device)
 
-    all_outputs, all_indices, all_tracks = model.predict(dataloader)
-    all_filenames = [str(dataset.get_image_path(idx).stem) for idx in all_indices]
-
-    print(f"Orientation predictions complete. Saving to {orientations_outfile_path}")
-
-    # Create a DataFrame
-    data = {
-        'dataloader_index': all_indices,
-        'filename': all_filenames,
-        'object_id': all_tracks,
-    }
-    other_df = pd.DataFrame(data)
-
-    model.write_outputs(all_outputs, orientations_outfile_path, other_df)
-    print(f"Final angles saved to {orientations_outfile_path}")
+    pred_df = model.predict(dataloader, orientations_outfile_path)
 
     researcher_data_accumulator.load_orientations(orientations_outfile_path)
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
