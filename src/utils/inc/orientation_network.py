@@ -94,32 +94,37 @@ class OrientationResNet(nn.Module):
         return running_loss / len(dataloader.dataset)
 
     def predict(self, dataloader, outfile_path):
-        self.eval()
-        all_outputs = []
-        all_indices = []
-        all_tracks = []
-        with torch.no_grad():
-            for images, _, tracks, idxs in tqdm(dataloader, desc="Predicting orientations", unit="batch"):
-                images = images.to(self.device)
-                outputs = self(images)
-                all_outputs.append(outputs.cpu())
-                all_indices.append(idxs)
-                all_tracks.append(tracks)
-
-        all_outputs = torch.cat(all_outputs, dim=0)
-        all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
-        all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
-
+        all_outputs, _, all_indices, all_tracks = self._get_predictions(dataloader)
         all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
-
         data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
         other_df = pd.DataFrame(data)
-        pred_df = self.write_outputs(all_outputs, outfile_path, other_df)
+
+        pred_df = self._consolidate_data(all_outputs, other_df)
+        pred_df.to_csv(outfile_path, index=False)
         print(f"Final angles saved to {outfile_path}")
 
         return pred_df
 
     def evaluate(self, dataloader, outfile_path):
+        all_outputs, all_gt_orientations, all_indices, all_tracks = self._get_predictions(dataloader)
+        all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
+        data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
+        other_df = pd.DataFrame(data)
+
+        pred_df = self._consolidate_data(all_outputs, other_df)
+        pred_df.to_csv(outfile_path, index=False)
+        print(f"Final angles saved to {outfile_path}")
+
+        gt_data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks,
+                   'x_val': all_gt_orientations[:, 0], 'y_val': all_gt_orientations[:, 1]}
+        gt_df = pd.DataFrame(gt_data)
+        gt_df['angle'] = self.calculate_angles_pd(gt_df['x_val'], gt_df['y_val'])
+
+        om = OrientationMetrics(pred_df, gt_df)
+        om.calculate_metrics()
+        return om
+
+    def _get_predictions(self, dataloader):
         self.eval()
         all_outputs = []
         all_indices = []
@@ -138,22 +143,7 @@ class OrientationResNet(nn.Module):
         all_gt_orientations = torch.cat(all_gt_orientations, dim=0).cpu().numpy()
         all_indices = torch.cat(all_indices, dim=0).cpu().numpy()
         all_tracks = torch.cat(all_tracks, dim=0).cpu().numpy()
-
-        all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
-
-        data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
-        other_df = pd.DataFrame(data)
-        pred_df = self.write_outputs(all_outputs, outfile_path, other_df)
-        print(f"Final angles saved to {outfile_path}")
-
-        gt_data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks,
-                   'x_val': all_gt_orientations[:, 0], 'y_val': all_gt_orientations[:, 1]}
-        gt_df = pd.DataFrame(gt_data)
-        gt_df['angle'] = self.calculate_angles_pd(gt_df['x_val'], gt_df['y_val'])
-
-        om = OrientationMetrics(pred_df, gt_df)
-        om.calculate_metrics()
-        return om
+        return all_outputs, all_gt_orientations, all_indices, all_tracks
 
     def calculate_angles(self, outputs):
         x_val, y_val = outputs[:, 0], outputs[:, 1]
@@ -168,9 +158,9 @@ class OrientationResNet(nn.Module):
         # print(f"Targets: {targets}")
         return self.loss_fn(predictions, targets)
 
-    # TODO: make this prettier, probably have first two columns filename and object ID. May need to build this into a separate IO module for the sake of sanity
+    # TODO: do column sorting
     # other_data should already be a pandas dataframe, with column names
-    def write_outputs(self, outputs, file_path, other_data=None):
+    def _consolidate_data(self, outputs, other_data=None):
         angles = self.calculate_angles(outputs)
         outputs = outputs.cpu()
         angles = angles.unsqueeze(1).cpu()
@@ -182,6 +172,4 @@ class OrientationResNet(nn.Module):
             df = pd.concat([df, other_data], axis=1)
         df.sort_values(by=['filename', 'object_id'], inplace=True)
 
-        df.to_csv(file_path, index=False, header=True)
         return df
-
