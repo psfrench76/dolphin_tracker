@@ -88,11 +88,16 @@ class DolphinTracker:
         if 'iou' in tracker_settings:
             self.iou = tracker_settings['iou']
         else:
-            self.iou = 0.7
+            self.iou = 0.7 # this aligns with default value in ultralytics
+
+        if 'conf' in tracker_settings:
+            self.conf = tracker_settings['conf']
+        else:
+            self.conf = 0.25 # this aligns with default value in ultralytics
 
     def track_from_images(self, image_dir_path):
         return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
-                                         persist=(not self.nopersist), iou=self.iou, stream=True)
+                                         persist=(not self.nopersist), iou=self.iou, stream=True, conf=self.conf)
 
     def evaluate(self, label_dir_path):
         if label_dir_path.is_dir():
@@ -317,7 +322,6 @@ class DolphinTracker:
             for i, gt_box in enumerate(gt_boxes):
                 for j, tr_box in enumerate(tr_boxes):
                     iou = self._iou(gt_box, tr_box)
-                    # TODO: Experiment with changing this to self.iou or self.match_thresh?
                     if iou > 0.5:
                         distances[i, j] = 1 - iou
 

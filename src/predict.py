@@ -57,18 +57,24 @@ def predict(model_path, data_path, output_path, split):
     if split is None:
         print(f"Evaluating model on {split} split...")
         results = model.predict(image_dir_path, project=project_dir_path, name=run_subdirectory,
-                                workers=num_workers, save=True)
+                                workers=num_workers, save=True, stream=True)
     else:
         results = model.predict(image_dir_path, split=split, project=project_dir_path, name=run_subdirectory,
-                            workers=num_workers, save=True)
+                            workers=num_workers, save=True, stream=True)
 
     output_path.mkdir(parents=True, exist_ok=True)
-    results_path = output_path / settings['evaluation_results_file']
+    results_path = output_path / settings['prediction_results_file']
 
     with open(results_path, 'w') as file:
-        file.write(f"Results: {results}\n")
+        file.write("frame,id,x,y,w,h,conf\n")
+        for idx, result in enumerate(results):
+            for box in result.boxes:
+                bbox = box.xywh[0].tolist()
+                if len(bbox) > 0:
+                    conf = box.conf.item()
+                    file.write(f"{idx},{box.id},{','.join([str(f) for f in bbox])},{conf}\n")
 
-    print(f"Evaluation results saved to {results_path}")
+    print(f"Prediction results saved to {results_path}")
     print(f"Project directory: {project_dir_path}")
     print(f"Run subdirectory: {run_subdirectory}")
 
