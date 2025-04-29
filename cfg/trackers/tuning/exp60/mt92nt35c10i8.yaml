@@ -1,0 +1,10 @@
+# copy of exp31/best_tracker
+fuse_score: true
+iou: 0.8 #This parameter drives non-maximum suppression in detector - reducing duplicates. Lower values mean less duplicates. In IoU.
+match_thresh: 0.92
+new_track_thresh: 0.35
+track_buffer: 22
+track_high_thresh: 0.20865831421240524
+track_low_thresh: 0.15799903390145054
+tracker_type: bytetrack
+conf: 0.10

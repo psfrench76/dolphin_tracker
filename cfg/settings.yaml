@@ -39,6 +39,7 @@ dataset_test_split: 'test' # Subdirectory of the dataset root
 # Output file names
 args_file: 'args.yaml' # Arguments file for track_from_video.py
 evaluation_results_file: 'evaluation_results.txt' # For eval.py
+prediction_results_file: 'predictions.txt' # For predict.py
 evolution_log_file: 'evolutions.yaml'
 orientations_weights_file: 'orientations_weights.pth'
 

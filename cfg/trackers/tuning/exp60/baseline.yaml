@@ -1,3 +1,4 @@
+# copy of exp31/best_tracker
 fuse_score: true
 iou: 0.5686597855717 #This parameter drives non-maximum suppression in detector - reducing duplicates. Lower values mean less duplicates. In IoU.
 match_thresh: 0.6869606373181654
