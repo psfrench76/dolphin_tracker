@@ -19,7 +19,7 @@ def main(model_path, data_path, output_dir, split):
     predict(model_path, data_path, output_dir, split)
 
 
-def predict(model_path, data_path, output_path, split):
+def predict(model_path, data_path, output_path, split, num_workers=None):
     phase = 'predict'
     model_path = Path(model_path)
     output_path = Path(output_path)
@@ -49,7 +49,7 @@ def predict(model_path, data_path, output_path, split):
     num_cores = len(psutil.Process().cpu_affinity())
 
     # Set the number of workers to the recommended value
-    num_workers = min(16, num_cores)
+    num_workers = num_workers or min(16, num_cores)
 
     print(f"Number of available CPU cores: {num_cores}")
     print(f"Setting number of workers to: {num_workers}")

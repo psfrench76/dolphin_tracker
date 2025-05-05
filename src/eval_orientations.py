@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--weights', '-w', type=Path, required=True, help="Path to the model weights file.")
     parser.add_argument('--augment', '-a', action='store_true', help="Use data augmentation.")
     parser.add_argument('--imgsz', '-sz', type=int, help="Image size for the model.")
+    parser.add_argument('--num_workers', '-nw', type=int, default=None, help="Number of workers for data loading.")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
@@ -32,6 +33,9 @@ def main():
     set_seed(0)
 
     device, num_workers = get_device_and_workers(split=False)
+    if args.num_workers is not None:
+        num_workers = args.num_workers
+        print(f"Overriding num_workers to {num_workers}.")
 
     dataloader_args = {
         'batch_size': 256,
