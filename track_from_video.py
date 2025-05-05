@@ -46,7 +46,8 @@ def main():
     args = parser.parse_args()
     run_args = vars(args)
 
-    break_apart = args.break_apart
+    # Setting break_apart as true by default until video input is implemented
+    break_apart = True
     input_path = args.input_data
     srt_path = args.srt
     input_name = input_path.stem
@@ -104,6 +105,7 @@ def main():
             raise FileNotFoundError(f"SRT file not found at {srt_path}")
 
         print(f"Using SRT file at {srt_path}")
+        summary_log.add(f"Used SRT file at {srt_path}")
 
     if args.output:
         output_dir_path = args.output
@@ -123,6 +125,9 @@ def main():
 
     with open(arg_outfile_path, "w") as f:
         yaml.dump(run_args, f)
+
+    summary_log.add(f"Used model weights from {model_path}")
+    summary_log.add(f"Used tracker config from {tracker_path}")
 
     output_filename = f"{output_file_basename}_{settings['researcher_output_suffix']}"
     output_file_path = output_dir_path / output_filename
@@ -149,16 +154,15 @@ def main():
     researcher_data_accumulator.add_distances_columns()
 
 
-    summary_log.add(f"Tracking and evaluation complete.")
+    print(f"\nTracking and evaluation complete.")
 
-    print(f"\nTracking and evaluation complete.\n")
-
-    print(f"\nStarting dolphin orientation prediction...\n")
+    print(f"Starting dolphin orientation prediction...\n")
     device, num_workers = get_device_and_workers()
     orientation_model_path = args.orientation_model or storage_path(settings['default_orientation_model'])
     orientations_outfile_path = output_dir_path / f"{output_file_basename}_{settings['orientations_results_suffix']}"
 
     print(f"Predicting on dataset {dataset_path}. Loading model weights from {orientation_model_path}")
+    summary_log.add(f"Used orientation model weights from {orientation_model_path}")
 
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_path, annotations=tracker_results_path, images_index_file=images_index_file)
     dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
@@ -169,11 +173,13 @@ def main():
 
     pred_df = model.predict(dataloader, orientations_outfile_path)
 
+    summary_log.add(f"Predicted orientations saved to {orientations_outfile_path}")
+
     researcher_data_accumulator.load_orientations(orientations_outfile_path)
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
 
     print(f"Final results saved to {output_file_path}")
-    summary_log.add(f"Final results saved to {output_file_path}")
+    summary_log.add(f"Final results saved to {output_file_path}\n")
 
     # The resize argument in generate_video_with_labels can be either a ratio or a pixel width
     if args.resize_ratio:
