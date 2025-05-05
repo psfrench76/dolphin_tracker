@@ -52,7 +52,7 @@ if __name__ == "__main__":
     parser.add_argument('json_source_dir', type=str, help='Path to the source directory')
     parser.add_argument('dataset_root_dr', type=str, help='Path to the dataset root directory')
     parser.add_argument('--oriented_bbox', action='store_true', help='Convert to oriented bounding box format')
-    parser.add_argument('--xy_orientations', action='store_true', help='Convert to xy orientations format')
+    parser.add_argument('--skip_orientations', action='store_true', help='Convert to xy orientations format')
     args = parser.parse_args()
 
-    copy_and_convert_all_labels(args.json_source_dir, args.dataset_root_dr, args.oriented_bbox, args.xy_orientations)
+    copy_and_convert_all_labels(args.json_source_dir, args.dataset_root_dr, args.oriented_bbox, not args.skip_orientations)

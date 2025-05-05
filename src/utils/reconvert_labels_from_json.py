@@ -89,7 +89,7 @@ if __name__ == "__main__":
     parser.add_argument('json_source_dir', type=str, help='Path to the source directory')
     parser.add_argument('dataset_root_dir', type=str, help='Path to the dataset root directory')
     parser.add_argument('--oriented_bbox', action='store_true', help='Convert to oriented bounding box format')
-    parser.add_argument('--xy_orientations', action='store_true', help='Use XY orientations and store in separate folder')
+    parser.add_argument('--skip_orientations', action='store_true', help='Use XY orientations and store in separate folder')
     args = parser.parse_args()
 
-    _reconvert_labels_from_json(args.json_source_dir, args.dataset_root_dir, args.oriented_bbox, args.xy_orientations)
+    _reconvert_labels_from_json(args.json_source_dir, args.dataset_root_dir, args.oriented_bbox, not args.skip_orientations)
