@@ -7,6 +7,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from utils.inc.orientation_network import OrientationResNet
 from utils.inc.orientation_dataset import DolphinOrientationDataset
 from utils.inc.settings import set_seed, settings, project_path, get_device_and_workers, storage_path
+from utils.inc.reporting import OrientationMetrics
 import pandas as pd
 import yaml
 import time
@@ -21,7 +22,6 @@ def main():
     args = parser.parse_args()
 
     data_config_path = project_path(f"cfg/data/{args.data_name}.yaml")
-    # TODO: make this more robust
     output_folder = args.output_folder
     if args.hyp_path == 'default':
         hyp_path = project_path("cfg/hyp/orientations") / "default.yaml"
@@ -73,7 +73,6 @@ def main():
         'pin_memory': True,
         'shuffle': True,
         'prefetch_factor': 4,
-        #'persistent_workers': True,
     }
 
     train_dataloader = DataLoader(train_dataset, **dataloader_args)
@@ -105,26 +104,8 @@ def main():
     for e in range(1, num_epochs+1):
         start_time = time.time()  # Start time
 
-        # # Use PyTorch Profiler
-        # with torch.profiler.profile(
-        #     activities=[
-        #         torch.profiler.ProfilerActivity.CPU,
-        #         torch.profiler.ProfilerActivity.CUDA,
-        #     ],
-        #     on_trace_ready=torch.profiler.tensorboard_trace_handler(storage_path('runs/train/orientations') / "profiler_logs"),
-        #     record_shapes=True,
-        #     with_stack=True,
-        #     profile_memory=True,
-        # ) as prof:
         epoch_loss = model.train_model_scaled(train_dataloader, optimizer)
         val_loss = model.validate_model(val_dataloader)
-
-        # Log profiler results
-        # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-
-
-        # epoch_loss = model.train_model(train_dataloader, optimizer)
-        # val_loss = model.validate_model(val_dataloader)
 
         # Log the losses to TensorBoard
         writer.add_scalar('Loss/Train', epoch_loss, e)
@@ -136,13 +117,18 @@ def main():
         end_time = time.time()  # End time
         epoch_duration = end_time - start_time
         print(f"Epoch {e}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}. Duration: {epoch_duration:.2f} seconds. Train cache size: {train_dataset.get_cache_size_mb():.2f} MB")
-        # print(f"Train cache stats: {train_dataset.cache_stats}; size: {DolphinOrientationDataset.shared_cache_size.value / 1024 / 1024:.2f} MB")
-        # print(f"Val cache stats: {val_dataset.cache_stats}; size: {DolphinOrientationDataset.shared_cache_size.value / 1024 / 1024:.2f} MB")
 
     torch.save(model.state_dict(), weights_file_path)
     print(f"Model saved to {weights_file_path}")
 
-    pred_df = model.predict(val_dataloader, outfile_path)
+    om = model.evaluate(val_dataloader, outfile_path)
+
+    metrics_file = output_folder / f"{output_folder.name}_{settings['orientations_metrics_suffix']}"
+
+    om.write_results(metrics_file)
+    om.print_results()
+
+    print(f"Metrics saved to {metrics_file}")
 
     # Close the TensorBoard writer
     writer.close()
