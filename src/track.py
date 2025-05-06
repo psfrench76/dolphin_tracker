@@ -228,7 +228,7 @@ class DolphinTracker:
         files = list(label_dir_path.glob('*.txt'))
         files.sort()
 
-        ground_truth_data_accumulator = DataAccumulator(bbox_type='xyxy', units='px')
+        ground_truth_data_accumulator = DataAccumulator(bbox_type='xyxy', units='pct')
         images_index = []
 
         # Define the tracks directory path
