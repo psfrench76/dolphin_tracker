@@ -4,6 +4,8 @@ import numpy as np
 import re
 import yaml
 import pysrt
+import subprocess
+import shutil
 from pathlib import Path
 from collections import defaultdict
 from .settings import settings, project_path
@@ -45,6 +47,115 @@ class TrackingMetrics:
     def write_events(self, filename):
         self.acc[0].mot_events.to_csv(filename)
 
+# TODO: Validate negative frames
+class HOTAContainer:
+    def __init__(self, input_folder):
+        self.benchmark = 'dolphin_tracker'
+        self.split = 'test'
+        self.challenge_name = f"{self.benchmark}-{self.split}"
+        self.tracker_name = 'DolphinTracker'
+
+        self.input_folder = input_folder
+        self.run_name = input_folder.name
+        self.gt_filepath = self.input_folder / f"{self.run_name}_{settings['gt_file_suffix']}"
+        self.pred_filepath = self.input_folder / f"{self.run_name}_{settings['results_file_suffix']}"
+
+        self.script_path = self._track_eval_path('scripts/run_mot_challenge.py')
+        self.seqmaps_folder = self._track_eval_path('data/gt/mot_challenge/seqmaps')
+        self.gt_folder = self._track_eval_path(f'data/gt/mot_challenge/{self.challenge_name}/{self.run_name}')
+        self.pred_folder = self._track_eval_path(f'data/trackers/mot_challenge/{self.challenge_name}/{self.tracker_name}')
+        self.pred_input_folder = self.pred_folder / 'data'
+        self.output_sub_folder = f"output/{self.run_name}"
+        self.output_folder = self.pred_folder / self.output_sub_folder
+        self.output_file_path = self.output_folder / f"pedestrian_summary.txt"
+        self.final_output_file_path = self.input_folder / f"{self.run_name}_{settings['hota_file_suffix']}"
+
+        self.seq_info_ini_path = self.gt_folder / "seqinfo.ini"
+        self.seq_map_path = self.seqmaps_folder / f"{self.challenge_name}.txt"
+        self.track_eval_gt_file_path = self.gt_folder / "gt/gt.txt"
+        self.track_eval_input_path = self.pred_input_folder / f"{self.run_name}.txt"
+
+        self.track_eval_input_path.parent.mkdir(parents=True, exist_ok=True)
+        self.track_eval_gt_file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.seq_map_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.sequence_length = self._get_sequence_length()
+        self.frames_with_gt = set()
+
+        self._update_seqinfo_ini()
+        self._update_seq_map()
+        self._update_gt_file()
+        self._update_input_file()
+
+
+    def run(self):
+        args = [
+            '--BENCHMARK', self.benchmark,
+            '--SPLIT_TO_EVAL', self.split,
+            '--TRACKERS_TO_EVAL', self.tracker_name,
+            '--DO_PREPROC', 'False',
+            '--OUTPUT_SUMMARY', 'False',
+            '--OUTPUT_EMPTY_CLASSES', 'False',
+            '--OUTPUT_DETAILED', 'False',
+            '--PLOT_CURVES', 'False',
+            '--PRINT_CONFIG', 'False',
+            '--PRINT_RESULTS', 'False',
+            '--TIME_PROGRESS', 'False',
+            '--OUTPUT_SUB_FOLDER', self.output_sub_folder,
+        ]
+        #print(f"Running TrackEval with command: {' '.join(['python', str(self.script_path), *args])}")
+        subprocess.run(['python', self.script_path, *args])
+        shutil.copy(self.output_file_path, self.final_output_file_path)
+        print(f"TrackEval finished. Results saved to {self.final_output_file_path}")
+
+    def _update_seqinfo_ini(self):
+        with open(self.seq_info_ini_path, 'w') as file:
+            file.write(f"[Sequence]\n"
+                       f"name={self.run_name}\n"
+                       f"seqLength={self.sequence_length}")
+
+    def _get_sequence_length(self):
+        gt_df = pd.read_csv(self.gt_filepath, header=None)
+        pred_df = pd.read_csv(self.pred_filepath, header=None)
+
+        gt_df.columns = settings['bbox_file_columns']
+        pred_df.columns = settings['bbox_file_columns']
+
+        gt_max = gt_df['frame'].max()
+        pred_max = pred_df['frame'].max()
+
+        return max(gt_max, pred_max) + 1
+
+    def _update_seq_map(self):
+        with open(self.seq_map_path, 'w') as file:
+            file.write(f"name\n{self.run_name}")
+
+    def _update_gt_file(self):
+        shutil.copy(self.gt_filepath, self.track_eval_gt_file_path)
+        df = pd.read_csv(self.track_eval_gt_file_path, header=None)
+        df.columns = settings['bbox_file_columns']
+        self._increment_frame_ids(df)
+        self.frames_with_gt = set(df['frame'].unique())
+        df.insert(6, 'confidence', 1)
+        df = df.dropna()
+        df.to_csv(self.track_eval_gt_file_path, index=False, header=False)
+
+    def _update_input_file(self):
+        shutil.copy(self.pred_filepath, self.track_eval_input_path)
+        df = pd.read_csv(self.track_eval_input_path, header=None)
+        df.columns = settings['bbox_file_columns']
+        self._increment_frame_ids(df)
+        df = df[df['frame'].isin(self.frames_with_gt)]
+        df.insert(6, 'confidence', 1)
+        df['confidence'] = df['visibility']
+
+        df.to_csv(self.track_eval_input_path, index=False, header=False)
+
+    def _increment_frame_ids(self, df):
+        df['frame'] = df['frame'].astype(int) + 1
+
+    def _track_eval_path(self, file):
+        return project_path('src/utils/inc/third_party/TrackEval/' + file)
 
 class OrientationMetrics:
     def __init__(self, pred_df, gt_df):

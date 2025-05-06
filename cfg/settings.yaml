@@ -59,6 +59,7 @@ orientations_results_suffix: 'orientations.txt'
 gt_images_index_suffix: 'gt_images_index.txt'
 orientations_metrics_suffix: 'orientation_metrics.csv'
 orientations_line_results_suffix: 'orientation_evaluation_lines.csv'
+hota_file_suffix: 'trackeval.txt'
 
 # Default tracking configuration files
 ultralytics_bytetrack: 'cfg/trackers/bytetrack_default.yaml' # Relative to project root

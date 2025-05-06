@@ -37,7 +37,7 @@ def run_tracking_and_evaluation(dataset_path, model_path, output_dir_path, track
     results = tracker.track_from_images(image_dir_path)
     tracker.save_tracker_results(image_dir_path, results, srt_path, drone_profile, manual_altitude, calibration)
     if evaluate:
-        metrics = tracker.evaluate(label_dir_path)
+        metrics = tracker.evaluate(image_dir_path, label_dir_path)
         return metrics
     else:
         return None
@@ -55,6 +55,9 @@ class DolphinTracker:
         self.botsort = botsort
         self.nopersist = nopersist
         self.using_obb = False
+
+        self.img_width = None
+        self.img_height = None
 
         if self.botsort:
             self.tracker_path = project_path(settings['ultralytics_botsort'])
@@ -99,10 +102,10 @@ class DolphinTracker:
         return self.model_instance.track(source=image_dir_path, tracker=self.tracker_path, device=self.device,
                                          persist=(not self.nopersist), iou=self.iou, stream=True, conf=self.conf)
 
-    def evaluate(self, label_dir_path):
+    def evaluate(self, image_dir_path, label_dir_path):
         if label_dir_path.is_dir():
 
-            self._save_ground_truth(label_dir_path)
+            self._save_ground_truth(image_dir_path, label_dir_path)
             gt_df = mm.io.loadtxt(self.gt_file_path)
             pred_df = mm.io.loadtxt(self.results_file_path)
 
@@ -142,6 +145,8 @@ class DolphinTracker:
             raise ValueError(f"Could not read image file {files[0]}")
 
         img_height, img_width = first_image.shape[:2]
+        self.img_width = img_width
+        self.img_height = img_height
 
         tracker_data_accumulator = DataAccumulator(bbox_type='xyxy', width=img_width, height=img_height, units='pct')
         if self.researcher_data_accumulator:
@@ -217,18 +222,19 @@ class DolphinTracker:
         images_df = pd.DataFrame(image_files_index, columns=['ImageFile'])
         images_df.to_csv(self.images_index_file_path, index=False, header=False)
 
-
+        #tracker_data_accumulator.add_conversion_columns('px', drop_original=True)
 
         tracker_data_accumulator.to_csv(self.results_file_path, mot15=True)
         print(f"Wrote raw results to {self.results_file_path}")
 
-    def _save_ground_truth(self, label_dir_path):
-        pattern = r"(\d+)(?=[._](txt|jpg\.rf))"  # Roboflow files have _jpg. followed by a hash then .txt; this
+    def _save_ground_truth(self, image_dir_path, label_dir_path):
+        # pattern = r"(\d+)(?=[._](txt|jpg\.rf))"  # Roboflow files have _jpg. followed by a hash then .txt; this
         # gets those
-        files = list(label_dir_path.glob('*.txt'))
+        pattern = r"(\d+)(?=[._](jpg|jpg\.rf))"
+        files = list(image_dir_path.glob('*.jpg'))
         files.sort()
 
-        ground_truth_data_accumulator = DataAccumulator(bbox_type='xyxy', units='pct')
+        ground_truth_data_accumulator = DataAccumulator(bbox_type='xyxy', units='pct', width=self.img_width, height=self.img_height)
         images_index = []
 
         # Define the tracks directory path
@@ -236,12 +242,14 @@ class DolphinTracker:
         zero_ids_warning = False
 
         # Read and process each file
-        for frame_index, label_path in enumerate(files):
-            match = re.search(pattern, str(label_path))
+        for frame_index, image_path in enumerate(files):
+            match = re.search(pattern, str(image_path))
             if not match:
-                raise ValueError(f"Could not process filename {label_path}")
+                raise ValueError(f"Could not process filename {image_path}")
 
             frame_id = match.group(1)
+
+            label_path = label_dir_path / image_path.with_suffix('.txt').name
             track_path = tracks_dir_path / label_path.name
 
             # Load track IDs if the track file exists
@@ -250,39 +258,43 @@ class DolphinTracker:
                 with open(track_path, 'r') as track_file:
                     track_ids = [line.strip() for line in track_file.readlines()]
 
-            with open(label_path, 'r') as f:
-                next_id = 1
-                empty_frame = True
+            if label_path.exists():
+                with open(label_path, 'r') as f:
+                    next_id = 1
+                    empty_frame = True
 
-                file_name = label_path.name
+                    file_name = label_path.name
 
-                for i, line in enumerate(f.readlines()):
-                    if line.strip():
-                        line_data = line.split(" ")
-                        bbox = line_data[1:5]
-                        # Use track ID from track file if available, otherwise use next_id if ID is 0 or None
-                        if track_ids and i < len(track_ids):
-                            track_id = int(track_ids[i])
-                        # The logic below is only preserved as a vestige for use with older dataset iterations for the sake of comparison. It should not be necessary for datasets created after March 3, 2025. If it is, you need to reconvert the dataset.
-                        elif line_data[0] == '0' or line_data[0] == 'None':
-                            track_id = next_id
-                            next_id += 1
-                            zero_ids_warning = True
-                        else:
-                            track_id = int(line_data[0])
+                    for i, line in enumerate(f.readlines()):
+                        if line.strip():
+                            line_data = line.split(" ")
+                            bbox = line_data[1:5]
+                            # Use track ID from track file if available, otherwise use next_id if ID is 0 or None
+                            if track_ids and i < len(track_ids):
+                                track_id = int(track_ids[i])
+                            # The logic below is only preserved as a vestige for use with older dataset iterations for the sake of comparison. It should not be necessary for datasets created after March 3, 2025. If it is, you need to reconvert the dataset.
+                            elif line_data[0] == '0' or line_data[0] == 'None':
+                                track_id = next_id
+                                next_id += 1
+                                zero_ids_warning = True
+                            else:
+                                track_id = int(line_data[0])
 
-                        ground_truth_data_accumulator.add_object(frame_index, frame_id, track_id, bbox, conf=1)
+                            ground_truth_data_accumulator.add_object(frame_index, frame_id, track_id, bbox, conf=1)
+                            images_index.append(file_name)
+                            empty_frame = False
+
+                    if empty_frame:
+                        ground_truth_data_accumulator.add_object(frame_index, frame_id, -1, ['nan', 'nan', 'nan', 'nan'])
                         images_index.append(file_name)
-                        empty_frame = False
-
-                if empty_frame:
-                    ground_truth_data_accumulator.add_object(frame_index, frame_id, -1, ['nan', 'nan', 'nan', 'nan'])
-                    images_index.append(file_name)
 
         images_df = pd.DataFrame(images_index, columns=['file_stem'])
         images_df.to_csv(self.gt_images_index_file_path, index=False, header=False)
 
         ground_truth_data_accumulator.finished_adding_objects()
+
+        #ground_truth_data_accumulator.add_conversion_columns('px', drop_original=True)
+
         ground_truth_data_accumulator.to_csv(self.gt_file_path, mot15=True)
 
         if zero_ids_warning:
