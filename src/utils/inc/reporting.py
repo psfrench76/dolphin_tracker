@@ -108,6 +108,15 @@ class HOTAContainer:
         shutil.copy(self.output_file_path, self.final_output_file_path)
         print(f"TrackEval finished. Results saved to {self.final_output_file_path}")
 
+    def get_hota(self):
+        if not self.final_output_file_path.exists():
+            raise ValueError(f"Output file {self.final_output_file_path} does not exist. Did you run the evaluation?")
+
+        df = pd.read_csv(self.final_output_file_path, sep=' ')
+        hota = float(df['HOTA'].values[0])
+        print(f"HOTA:\n{hota}")
+        return hota
+
     def _update_seqinfo_ini(self):
         with open(self.seq_info_ini_path, 'w') as file:
             file.write(f"[Sequence]\n"

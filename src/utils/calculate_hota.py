@@ -10,6 +10,7 @@ def main():
 
     hc = HOTAContainer(output_folder)
     hc.run()
+    hc.get_hota()
 
 if __name__ == "__main__":
     main()
