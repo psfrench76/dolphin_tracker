@@ -78,7 +78,13 @@ def main():
     train_dataloader = DataLoader(train_dataset, **dataloader_args)
     val_dataloader = DataLoader(val_dataset, **dataloader_args)
     print(f"Initializing model with {len(train_dataset)} training images and {len(val_dataset)} validation images.")
-    model = OrientationResNet()
+
+    if 'loss' in hp:
+        loss = hp['loss']
+    else:
+        loss = 'MSE'
+
+    model = OrientationResNet(loss=loss)
     model.set_device(device)
 
     lr_start = float(hp['lr_start'])

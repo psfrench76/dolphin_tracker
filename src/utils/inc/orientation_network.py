@@ -10,7 +10,7 @@ from torch.amp import GradScaler, autocast
 from .reporting import OrientationMetrics
 
 class OrientationResNet(nn.Module):
-    def __init__(self, weights=None, device=None):
+    def __init__(self, weights=None, device=None, loss=None):
         super(OrientationResNet, self).__init__()
         self.device = device
         load_args = {'weights_only': True}
@@ -27,7 +27,10 @@ class OrientationResNet(nn.Module):
             self.resnet = models.resnet18(weights=ResNet18_Weights.DEFAULT)
             self.resnet.fc = nn.Linear(self.resnet.fc.in_features, 2)
 
-        self.loss_fn = nn.MSELoss()
+        if loss is None or loss == 'MSE':
+            self.loss_fn = nn.MSELoss()
+        elif loss == 'RMSE':
+            self.loss_fn = lambda predictions, targets: torch.sqrt(nn.MSELoss()(predictions, targets))
 
     def forward(self, x):
         x = self.resnet(x)

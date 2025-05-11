@@ -6,4 +6,3 @@ batch_size: 256
 freeze: 0
 imgsz: 244
 augment: True
-loss: MSE

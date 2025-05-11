@@ -1,4 +1,3 @@
-# baseline from exp61/lr0005.yaml
 lr_start: 0.0005
 lr_final_factor: 0.01
 num_epochs: 100
