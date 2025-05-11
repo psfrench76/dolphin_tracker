@@ -563,6 +563,24 @@ class DataAccumulator:
                 self.position_columns.append(f"Distances_{units}")
                 self.position_columns.append(f"MaxDistance_{units}")
 
+    def add_angular_distances_columns(self):
+        # Calculate the angular distance between each pair of individuals
+        # col_index = self._get_data_column_index()
+        # for units, columns in col_index.items():
+        #     if units == 'deg':
+        angular_distances = []
+        for frame_index, group in self.df.groupby('FrameIndex'):
+            angles = group['MovingAvgAngle_deg'].values
+            object_ids = group['ObjectID'].values
+            angle_matrix = self._matrix_angular_distances(angles)
+            if len(group) > 1:
+                print(angle_matrix)
+            for i in range(len(group)):
+                angle_dict = {object_ids[j]: angle_matrix[j, i] for j in range(len(group)) if i != j}
+                angular_distances.append(angle_dict)
+
+        self.df[f"Angles_deg"] = angular_distances
+
     def _convert_to_df(self):
         df = pd.DataFrame(self.data, columns=self._all_columns())
         rename_cols = {}
@@ -570,7 +588,7 @@ class DataAccumulator:
             rename_cols[col] = f"{col}_{self.units}"
             df[col] = df[col].astype(float)
         df['FrameIndex'] = df['FrameIndex'].astype(int)
-        df['FrameID'] = df['FrameID'].astype(int)
+        df['FrameID'] = df['FrameID'].astype(str)
         df['ObjectID'] = df['ObjectID'].astype('Int64')
         self.position_columns = [val for _, val in rename_cols.items()]
         df.rename(columns=rename_cols, inplace=True)
@@ -700,3 +718,10 @@ class DataAccumulator:
         diffs = np.abs(angle - neighbors)
         diffs = np.where(diffs > 180, 360 - diffs, diffs)
         return diffs
+
+    def _matrix_angular_distances(self, angles):
+        dists = angles[:, np.newaxis] - angles
+        # dists = np.abs(dists)
+        dists = np.where(dists > 180, dists - 360, dists)
+        dists = np.where(dists < -180, dists + 360, dists)
+        return dists

@@ -156,6 +156,7 @@ class DolphinTracker:
         for i, result in enumerate(results):
             match = re.search(pattern, str(files[i]))
             frame_id = match.group(1)
+            file_stem = files[i].stem
 
             if result.obb:
                 for xywhr, xyxyxyxy in zip(result.obb.xywhr, result.obb.xyxyxyxy):
@@ -204,7 +205,7 @@ class DolphinTracker:
 
                         tracker_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox, conf=conf)
                         if self.researcher_data_accumulator:
-                            self.researcher_data_accumulator.add_object(i, frame_id, track_id, researcher_bbox)
+                            self.researcher_data_accumulator.add_object(i, file_stem, track_id, researcher_bbox)
         if self.researcher_data_accumulator:
             self.researcher_data_accumulator.finished_adding_objects()
         tracker_data_accumulator.finished_adding_objects()

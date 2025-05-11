@@ -49,7 +49,9 @@ def main():
     parser.add_argument('--angle_threshold', '-at', type=float,
                         help="Threshold to use for filtering angles. Default is 0.6.")
     parser.add_argument('--moving_avg_window', '-mw', type=int,
-                        help="Window size for moving average when averaging orientations. Default is 20 frames. Note that this is calculated after 180-degree filtering.")
+                        help="Window size for moving average when averaging orientations. Default is 20 frames. Note that this is calculated after 180-degree filtering. Passing a value of 1 is equivalent to not using a moving average.")
+    parser.add_argument('--video_raw_angle', '-vra', action='store_true',
+                        help="Use the raw angle for the video instead of the filtered angle.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -191,6 +193,7 @@ def main():
 
     researcher_data_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window, angle_window=angle_window, threshold=threshold)
     researcher_data_accumulator.add_moving_avg_angle_column(window_size=moving_avg_window)
+    researcher_data_accumulator.add_angular_distances_columns()
 
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
 
@@ -209,7 +212,12 @@ def main():
         print(f"Generating prediction video...")
 
         results_file_path = output_dir_path / f"{output_file_basename}_{settings['results_file_suffix']}"
-        generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path, orientations_outfile=orientations_outfile_path)
+        if args.video_raw_angle:
+            angle_column = 'Angle_deg'
+        else:
+            angle_column = 'MovingAvgAngle_deg'
+
+        generate_video_with_labels(dataset_path, output_dir_path, resize, results_file_path, orientations_outfile=orientations_outfile_path, researcher_csv=output_file_path, csv_angle_column=angle_column)
 
         video_filename = f"{output_file_basename}_{settings['prediction_video_suffix']}"
         video_path = output_dir_path / video_filename

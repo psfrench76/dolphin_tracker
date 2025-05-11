@@ -27,11 +27,16 @@ def main():
     parser.add_argument('--end_frame', '-ef', type=int, default=-1,
                         help="End frame for the video. Default is -1 (all frames).")
     parser.add_argument('--ignore_bbox', '-ib', action='store_true', )
+    parser.add_argument('--researcher_csv', '-rc', type=Path,
+                        help="Path to the researcher CSV file (optional).")
+    parser.add_argument('--researcher_csv_col', '-rcc', type=str,
+                        help="Name of angle column to use in the researcher CSV file (optional). Default is 'MovingAvgAngle_deg'.")
     args = parser.parse_args()
 
     generate_video_with_labels(args.dataset_root_path, args.output_folder, args.resize, args.bbox_path,
                                args.orientations_outfile, sf=args.start_frame, ef=args.end_frame,
-                               ignore_bbox=args.ignore_bbox)
+                               ignore_bbox=args.ignore_bbox, researcher_csv=args.researcher_csv,
+                               csv_angle_column=args.researcher_csv_col)
 
 
 if __name__ == '__main__':

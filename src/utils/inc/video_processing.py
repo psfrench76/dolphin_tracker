@@ -31,7 +31,7 @@ from .oriented_bounding_boxes import get_orientation_arrow_point
 # orientations_outfile (Path): Path to the orientations output file (optional). This is an output file from the
 # orientations neural network.
 def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbox_path=None, orientations_outfile=None,
-                               sf=0, ef=-1, ignore_bbox=False):
+                               sf=0, ef=-1, ignore_bbox=False, researcher_csv=None, csv_angle_column=None):
     if dataset_root_path.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir']]:
         raise ValueError("Dataset directory should be the dataset root, not images, labels, or tracks directory.")
 
@@ -49,7 +49,7 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         all_bboxes = _get_bboxes_from_txt(bbox_path)
         if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
             oriented_bbox = True
-        all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes)
+        all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes, researcher_csv, csv_angle_column)
         output_video_path = output_folder / f"{run_name}_{settings['prediction_video_suffix']}"
     else:
         raise ValueError(
@@ -325,14 +325,24 @@ def _get_obb_bbox_from_points(x1, y1, x2, y2, x3, y3, x4, y4, img_width, img_hei
     return {k: int(v) for k, v in bbox.items()}
 
 
-def _get_orientations_from_txt_and_merge(orientations_file, bboxes):
+def _get_orientations_from_txt_and_merge(orientations_file, bboxes, researcher_csv=None, csv_column=None):
     if orientations_file is None:
         return bboxes
     else:
-        orientations = pd.read_csv(orientations_file, sep=',', index_col=None)
-        orientations.rename({'filename': 'file_stem', 'object_id': 'id'}, axis=1, inplace=True)
-        # bboxes = pd.concat([bboxes, orientations[['angle']]], axis=1)
-        bboxes = bboxes.merge(orientations, on=['file_stem', 'id'], how='left')
+        if orientations_file.suffix == '.txt':
+            orientations = pd.read_csv(orientations_file, sep=',', index_col=None)
+            orientations.rename({'filename': 'file_stem', 'object_id': 'id'}, axis=1, inplace=True)
+            bboxes = bboxes.merge(orientations, on=['file_stem', 'id'], how='left')
+        else:
+            raise ValueError(f"Orientation file {orientations_file} must be a .txt file.")
+
+        if researcher_csv is not None:
+            csv_column = csv_column or 'MovingAvgAngle_deg'
+            researcher_data = pd.read_csv(researcher_csv, sep=',', index_col=None)
+            bboxes.rename({'angle': 'raw_angle'}, axis=1, inplace=True)
+            researcher_data.rename({'FrameID': 'file_stem', 'ObjectID': 'id', csv_column: 'angle'}, axis=1, inplace=True)
+            bboxes = bboxes.merge(researcher_data, on=['file_stem', 'id'], how='left')
+
         return bboxes
 
 
