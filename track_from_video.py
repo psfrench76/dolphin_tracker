@@ -48,6 +48,8 @@ def main():
                         help="Angle window to use for filtering angles. Default is 25.")
     parser.add_argument('--angle_threshold', '-at', type=float,
                         help="Threshold to use for filtering angles. Default is 0.6.")
+    parser.add_argument('--moving_avg_window', '-mw', type=int,
+                        help="Window size for moving average when averaging orientations. Default is 20 frames. Note that this is calculated after 180-degree filtering.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -185,8 +187,11 @@ def main():
     neighbor_window = args.neighbor_window or settings['default_filter_neighbor_count']
     angle_window = args.angle_window or settings['default_filter_angle_window']
     threshold = args.angle_threshold or settings['default_filter_angle_threshold']
+    moving_avg_window = args.moving_avg_window or settings['default_moving_avg_window']
 
     researcher_data_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window, angle_window=angle_window, threshold=threshold)
+    researcher_data_accumulator.add_moving_avg_angle_column(window_size=moving_avg_window)
+
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
 
     print(f"Final results saved to {output_file_path}")

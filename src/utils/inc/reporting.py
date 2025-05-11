@@ -440,6 +440,19 @@ class DataAccumulator:
                     self.df.loc[group.index[i], 'FilteredAngle_deg'] = self._invert_angle_deg(this_angle)
 
 
+    def add_moving_avg_angle_column(self, window_size=20):
+        if not self.finished:
+            raise ValueError("Cannot add moving average angle column before calling finished_adding_objects().")
+        if 'Angle_deg' not in self.df.columns:
+            raise ValueError("Cannot add moving average angle column before loading orientations.")
+        if 'FilteredAngle_deg' not in self.df.columns:
+            raise ValueError("Cannot add moving average angle column before adding filtered angle column.")
+        if 'MovingAvgAngle_deg' in self.df.columns:
+            raise ValueError("Moving average angle column already exists. Cannot add again.")
+
+        for object_id, group in self.df.groupby('ObjectID'):
+            self.df.loc[group.index, 'MovingAvgAngle_deg'] = group['FilteredAngle_deg'].rolling(window=window_size, min_periods=1, center=True).mean()
+
     def add_gsd_column(self, drone_profile, calibration):
         drone_profile = drone_profile or settings['default_drone_profile']
         drone_profile = Path(drone_profile)

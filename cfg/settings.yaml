@@ -9,6 +9,7 @@ drone_sensor_height_mm: 8 # millimeters
 default_filter_neighbor_count: 120 # Number of neighbors to use for orientation filtering
 default_filter_angle_window: 25 # Closeness threshold for finding "opposite angles" -- plus or minus this value
 default_filter_angle_threshold: 0.6 # Threshold to use for determining when the "majority" is opposite. Values should be >=0.5 to prevent chaos.
+default_moving_avg_window: 20 # Number of frames to use for the moving average filter on orientations. Note that this is calculated after filtering for opposite angles.
 
 # File system organization
 storage_root: '..' # Intended for large data, not code. Either absolute, or relative to the project root.
