@@ -406,6 +406,40 @@ class DataAccumulator:
         # self.df = self.df.merge(orientation_df, on='FrameIndex', how='left')
         # self.df['Rotation'] = self.df['Rotation'].fillna(0)
 
+    def add_filtered_angle_column(self, neighbor_window=120, angle_window=25, threshold=0.6):
+        if not self.finished:
+            raise ValueError("Cannot add filtered angle column before calling finished_adding_objects().")
+        if 'Angle_deg' not in self.df.columns:
+            raise ValueError("Cannot add filtered angle column before loading orientations.")
+        if 'FilteredAngle_deg' in self.df.columns:
+            raise ValueError("Filtered angle column already exists. Cannot add again.")
+
+        count_column_name = f'NeighborFrameObjsPlusMinus{angle_window}Deg_count'
+
+        self.df['FilteredAngle_deg'] = self.df['Angle_deg']
+        self.df[count_column_name] = 0
+
+        for object_id, group in self.df.groupby('ObjectID'):
+            for i in range(len(group)):
+                neighbor_start = max(0, min(i - neighbor_window // 2, len(group) - neighbor_window))
+                neighbor_end = min(len(group), neighbor_start + neighbor_window)
+                total_neighbors = neighbor_end - neighbor_start
+                angles_similar = 0
+                angles_opposite = 0
+                neighbor_angles = group['Angle_deg'].iloc[neighbor_start:neighbor_end]
+                this_angle = group['Angle_deg'].iloc[i]
+                this_row = group.iloc[i]
+                neighbor_angle_distances = self._angular_distances(this_angle, neighbor_angles)
+                for j in range(len(neighbor_angle_distances)):
+                    if neighbor_angle_distances[j] < angle_window:
+                        angles_similar += 1
+                    elif neighbor_angle_distances[j] > 180 - angle_window and neighbor_angle_distances[j] < 180 + angle_window:
+                        angles_opposite += 1
+                self.df.loc[group.index[i], count_column_name] = angles_opposite
+                if angles_opposite >= total_neighbors * threshold:
+                    self.df.loc[group.index[i], 'FilteredAngle_deg'] = self._invert_angle_deg(this_angle)
+
+
     def add_gsd_column(self, drone_profile, calibration):
         drone_profile = drone_profile or settings['default_drone_profile']
         drone_profile = Path(drone_profile)
@@ -642,3 +676,14 @@ class DataAccumulator:
         columns.extend(self.position_columns)
         columns.append('Confidence')
         return columns
+
+    def _invert_angle_deg(self, angle):
+        if angle > 0:
+            return angle - 180
+        else:
+            return angle + 180
+
+    def _angular_distances(self, angle, neighbors):
+        diffs = np.abs(angle - neighbors)
+        diffs = np.where(diffs > 180, 360 - diffs, diffs)
+        return diffs

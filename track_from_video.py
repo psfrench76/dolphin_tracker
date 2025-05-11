@@ -42,6 +42,12 @@ def main():
                              "output.csv. This can take the place of an SRT file if one is missing.")
     parser.add_argument('--output', '-o', type=Path,
                         help="Path to the output directory. Default is output/tracker.")
+    parser.add_argument('--neighbor_window', '-nw', type=int,
+                        help="Number of neighbors to use for filtering angles. Default is 120.")
+    parser.add_argument('--angle_window', '-aw', type=int,
+                        help="Angle window to use for filtering angles. Default is 25.")
+    parser.add_argument('--angle_threshold', '-at', type=float,
+                        help="Threshold to use for filtering angles. Default is 0.6.")
 
     args = parser.parse_args()
     run_args = vars(args)
@@ -176,6 +182,11 @@ def main():
     summary_log.add(f"Predicted orientations saved to {orientations_outfile_path}")
 
     researcher_data_accumulator.load_orientations(orientations_outfile_path)
+    neighbor_window = args.neighbor_window or settings['default_filter_neighbor_count']
+    angle_window = args.angle_window or settings['default_filter_angle_window']
+    threshold = args.angle_threshold or settings['default_filter_angle_threshold']
+
+    researcher_data_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window, angle_window=angle_window, threshold=threshold)
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
 
     print(f"Final results saved to {output_file_path}")

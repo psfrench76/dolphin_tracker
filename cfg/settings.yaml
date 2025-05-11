@@ -6,6 +6,9 @@ default_drone_profile: 'dji_phantom_4_pro_v2' # The default drone profile to use
 default_video_resize_ratio: 0.25
 estimated_drone_starting_altitude_m: 2.25 # meters
 drone_sensor_height_mm: 8 # millimeters
+default_filter_neighbor_count: 120 # Number of neighbors to use for orientation filtering
+default_filter_angle_window: 25 # Closeness threshold for finding "opposite angles" -- plus or minus this value
+default_filter_angle_threshold: 0.6 # Threshold to use for determining when the "majority" is opposite. Values should be >=0.5 to prevent chaos.
 
 # File system organization
 storage_root: '..' # Intended for large data, not code. Either absolute, or relative to the project root.
