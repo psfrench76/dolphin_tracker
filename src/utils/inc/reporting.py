@@ -47,7 +47,6 @@ class TrackingMetrics:
     def write_events(self, filename):
         self.acc[0].mot_events.to_csv(filename)
 
-# TODO: Validate negative frames
 class HOTAContainer:
     def __init__(self, input_folder):
         self.benchmark = 'dolphin_tracker'
@@ -94,7 +93,6 @@ class HOTAContainer:
             '--SPLIT_TO_EVAL', self.split,
             '--TRACKERS_TO_EVAL', self.tracker_name,
             '--DO_PREPROC', 'False',
-            '--OUTPUT_SUMMARY', 'False',
             '--OUTPUT_EMPTY_CLASSES', 'False',
             '--OUTPUT_DETAILED', 'False',
             '--PLOT_CURVES', 'False',
@@ -104,6 +102,7 @@ class HOTAContainer:
             '--OUTPUT_SUB_FOLDER', self.output_sub_folder,
         ]
         #print(f"Running TrackEval with command: {' '.join(['python', str(self.script_path), *args])}")
+        self.output_folder.mkdir(parents=True, exist_ok=True)
         subprocess.run(['python', self.script_path, *args])
         shutil.copy(self.output_file_path, self.final_output_file_path)
         print(f"TrackEval finished. Results saved to {self.final_output_file_path}")
