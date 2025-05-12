@@ -45,6 +45,12 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
         if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
             oriented_bbox = True
+
+        if orientations_outfile:
+            all_bboxes.drop(columns=['angle'], inplace=True)
+            all_bboxes = _get_orientations_from_txt_and_merge(orientations_outfile, all_bboxes, researcher_csv,
+                                                              csv_angle_column)
+            output_video_path = output_folder / f"{run_name}_{settings['gt_bbox_pred_orientation_video_suffix']}"
     elif bbox_path.suffix == '.txt':
         all_bboxes = _get_bboxes_from_txt(bbox_path)
         if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
