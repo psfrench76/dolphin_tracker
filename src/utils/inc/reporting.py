@@ -218,7 +218,8 @@ class DataAccumulator:
     BBOX_TYPES = {'xywhr': ['CenterX', 'CenterY', 'Width', 'Height', 'Rotation'],
                   'xyxyxyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y', 'Point3X', 'Point3Y', 'Point4X', 'Point4Y'],
                   'xyxy': ['Point1X', 'Point1Y', 'Point2X', 'Point2Y'],
-                  'xywh': ['CenterX', 'CenterY', 'Width', 'Height'], }
+                  'xywh': ['CenterX', 'CenterY', 'Width', 'Height'],
+                  'None': [], }
     BBOX_UNITS = ['px', 'pct', 'm']
 
     def __init__(self, bbox_type, units, width=None, height=None):
@@ -390,7 +391,10 @@ class DataAccumulator:
             raise ValueError(f"Orientation file {orientation_outfile_path} does not exist.")
         orientation_df = pd.read_csv(orientation_outfile_path)
 
-        self.df['Angle_deg'] = orientation_df['angle']
+        orientation_df.rename(columns={'angle': 'Angle_deg', 'object_id': 'ObjectID', 'filename': 'FrameID',
+                                       'x_val': 'AngleXVal', 'y_val': 'AngleYVal'}, inplace=True)
+
+        self.df = self.df.merge(orientation_df[['Angle_deg', 'ObjectID', 'FrameID', 'AngleXVal', 'AngleYVal']], on=['FrameID', 'ObjectID'])
 
         # orientation_df.rename(columns={'angle': 'Angle_deg'}, inplace=True)
         # # images_index_filename = orientation_outfile_path.parent / orientation_outfile_path.name.replace(
@@ -417,19 +421,34 @@ class DataAccumulator:
         count_column_name = f'NeighborFrameObjsPlusMinus{angle_window}Deg_count'
 
         self.df['FilteredAngle_deg'] = self.df['Angle_deg']
+        self.df['FilteredAngleXVal'] = self.df['AngleXVal']
+        self.df['FilteredAngleYVal'] = self.df['AngleYVal']
         self.df[count_column_name] = 0
+        self.df['NeighborsConsideredForAngleFiltering'] = 0
+        self.df['NeighborWindowStart'] = 0
+        self.df['NeighborWindowEnd'] = 0
+        self.df['ObjectGroupLength'] = 0
 
         for object_id, group in self.df.groupby('ObjectID'):
             for i in range(len(group)):
                 neighbor_start = max(0, min(i - neighbor_window // 2, len(group) - neighbor_window))
                 neighbor_end = min(len(group), neighbor_start + neighbor_window)
                 total_neighbors = neighbor_end - neighbor_start
+                self.df.loc[group.index[i], 'NeighborsConsideredForAngleFiltering'] = total_neighbors
+                self.df.loc[group.index[i], 'NeighborWindowStart'] = neighbor_start
+                self.df.loc[group.index[i], 'NeighborWindowEnd'] = neighbor_end
+                self.df.loc[group.index[i], 'ObjectGroupLength'] = len(group)
                 angles_similar = 0
                 angles_opposite = 0
                 neighbor_angles = group['Angle_deg'].iloc[neighbor_start:neighbor_end]
                 this_angle = group['Angle_deg'].iloc[i]
+                this_x = group['AngleXVal'].iloc[i]
+                this_y = group['AngleYVal'].iloc[i]
+                # neighbor_x = group['AngleXVal'].iloc[neighbor_start:neighbor_end]
+                # neighbor_y = group['AngleYVal'].iloc[neighbor_start:neighbor_end]
                 this_row = group.iloc[i]
                 neighbor_angle_distances = self._angular_distances(this_angle, neighbor_angles)
+                # neighbor_angle_distances = self._angular_distances_by_vector(this_x, this_y, neighbor_x, neighbor_y)
                 for j in range(len(neighbor_angle_distances)):
                     if neighbor_angle_distances[j] < angle_window:
                         angles_similar += 1
@@ -438,6 +457,8 @@ class DataAccumulator:
                 self.df.loc[group.index[i], count_column_name] = angles_opposite
                 if angles_opposite >= total_neighbors * threshold:
                     self.df.loc[group.index[i], 'FilteredAngle_deg'] = self._invert_angle_deg(this_angle)
+                    self.df.loc[group.index[i], 'FilteredAngleXVal'] = -this_x
+                    self.df.loc[group.index[i], 'FilteredAngleYVal'] = -this_y
 
 
     def add_moving_avg_angle_column(self, window_size=20):
@@ -451,7 +472,11 @@ class DataAccumulator:
             raise ValueError("Moving average angle column already exists. Cannot add again.")
 
         for object_id, group in self.df.groupby('ObjectID'):
-            self.df.loc[group.index, 'MovingAvgAngle_deg'] = group['FilteredAngle_deg'].rolling(window=window_size, min_periods=1, center=True).mean()
+            #self.df.loc[group.index, 'MovingAvgAngle_deg'] = group['FilteredAngle_deg'].rolling(window=window_size, min_periods=1, center=True).mean()
+            self.df.loc[group.index, 'MovingAvgAngleXVal'] = group['FilteredAngleXVal'].rolling(window=window_size, min_periods=1, center=True).mean()
+            self.df.loc[group.index, 'MovingAvgAngleYVal'] = group['FilteredAngleYVal'].rolling(window=window_size, min_periods=1, center=True).mean()
+
+        self.df['MovingAvgAngle_deg'] = np.arctan2(self.df['MovingAvgAngleYVal'], self.df['MovingAvgAngleXVal']) * (180 / np.pi)
 
     def add_gsd_column(self, drone_profile, calibration):
         drone_profile = drone_profile or settings['default_drone_profile']
@@ -573,8 +598,7 @@ class DataAccumulator:
             angles = group['MovingAvgAngle_deg'].values
             object_ids = group['ObjectID'].values
             angle_matrix = self._matrix_angular_distances(angles)
-            if len(group) > 1:
-                print(angle_matrix)
+
             for i in range(len(group)):
                 angle_dict = {object_ids[j]: angle_matrix[j, i] for j in range(len(group)) if i != j}
                 angular_distances.append(angle_dict)
@@ -718,6 +742,9 @@ class DataAccumulator:
         diffs = np.abs(angle - neighbors)
         diffs = np.where(diffs > 180, 360 - diffs, diffs)
         return diffs
+
+    def _angular_distances_by_vector(self, this_x, this_y, neighbors_x, neighbors_y):
+        pass
 
     def _matrix_angular_distances(self, angles):
         dists = angles[:, np.newaxis] - angles

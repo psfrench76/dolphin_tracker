@@ -7,7 +7,8 @@ from tqdm import tqdm
 from pathlib import Path
 import numpy as np
 from torch.amp import GradScaler, autocast
-from .reporting import OrientationMetrics
+from .reporting import OrientationMetrics, DataAccumulator
+from .settings import settings
 
 class OrientationResNet(nn.Module):
     def __init__(self, weights=None, device=None, loss=None):
@@ -108,7 +109,9 @@ class OrientationResNet(nn.Module):
 
         return pred_df
 
-    def evaluate(self, dataloader, outfile_path):
+    def evaluate(self, dataloader, outfile_path, filter_angles=False, neighbor_window=None, angle_window=None,
+                 angle_threshold=None, moving_avg_window=None):
+
         all_outputs, all_gt_orientations, all_indices, all_tracks = self._get_predictions(dataloader)
         all_filenames = [str(dataloader.dataset.get_image_path(idx).stem) for idx in all_indices]
         data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks, }
@@ -116,7 +119,39 @@ class OrientationResNet(nn.Module):
 
         pred_df = self._consolidate_data(all_outputs, other_df)
         pred_df.to_csv(outfile_path, index=False)
-        print(f"Final angles saved to {outfile_path}")
+        print(f"Predicted angles saved to {outfile_path}")
+
+        if filter_angles:
+            angle_accumulator = DataAccumulator('None', 'px')
+            for _, row in pred_df.iterrows():
+                angle_accumulator.add_object(row['frame_index'], row['filename'], row['object_id'], [])
+
+            angle_accumulator.finished_adding_objects()
+
+            angle_accumulator.load_orientations(outfile_path)
+
+            neighbor_window = neighbor_window or settings['default_filter_neighbor_count']
+            angle_window = angle_window or settings['default_filter_angle_window']
+            threshold = angle_threshold or settings['default_filter_angle_threshold']
+            moving_avg_window = moving_avg_window or settings['default_moving_avg_window']
+
+            angle_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window,
+                                                                  angle_window=angle_window, threshold=threshold)
+            angle_accumulator.add_moving_avg_angle_column(window_size=moving_avg_window)
+            filtered_angle_filepath = str(outfile_path).replace(settings['orientations_results_suffix'], settings['filtered_angle_suffix'])
+            angle_accumulator.to_csv(filtered_angle_filepath)
+            print(f"Filtered angles saved to {filtered_angle_filepath}")
+
+            filtered_df = angle_accumulator.df[['FrameID', 'ObjectID', 'MovingAvgAngle_deg', 'MovingAvgAngleXVal', 'MovingAvgAngleYVal']].copy()
+            filtered_df.rename(columns={'FrameID': 'filename', 'ObjectID': 'object_id',
+                                        'MovingAvgAngle_deg': 'angle_filtered', 'MovingAvgAngleXVal': 'x_val_filtered',
+                                        'MovingAvgAngleYVal': 'y_val_filtered'}, inplace=True)
+
+            pred_df = pred_df.merge(filtered_df, on=['filename', 'object_id'], how='left')
+
+            pred_df['angle'] = pred_df['angle_filtered']
+            pred_df['x_val'] = pred_df['x_val_filtered']
+            pred_df['y_val'] = pred_df['y_val_filtered']
 
         gt_data = {'dataloader_index': all_indices, 'filename': all_filenames, 'object_id': all_tracks,
                    'x_val': all_gt_orientations[:, 0], 'y_val': all_gt_orientations[:, 1]}
@@ -174,5 +209,6 @@ class OrientationResNet(nn.Module):
         if other_data is not None:
             df = pd.concat([df, other_data], axis=1)
         df.sort_values(by=['filename', 'object_id'], inplace=True)
+        df['frame_index'] = df['filename'].factorize()[0]
 
         return df

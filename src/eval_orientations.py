@@ -20,6 +20,15 @@ def main():
     parser.add_argument('--augment', '-a', action='store_true', help="Use data augmentation.")
     parser.add_argument('--imgsz', '-sz', type=int, help="Image size for the model.")
     parser.add_argument('--num_workers', '-nw', type=int, default=None, help="Number of workers for data loading.")
+    parser.add_argument('--filter_angles', '-fa', action='store_true', help="Evaluate using angle filtering and averaging. Not compatible with augment.")
+    parser.add_argument('--neighbor_window', '-nbw', type=int,
+                        help="Number of neighbors to use for filtering angles. Default is 120.")
+    parser.add_argument('--angle_window', '-aw', type=int,
+                        help="Angle window to use for filtering angles. Default is 25.")
+    parser.add_argument('--angle_threshold', '-at', type=float,
+                        help="Threshold to use for filtering angles. Default is 0.6.")
+    parser.add_argument('--moving_avg_window', '-mw', type=int,
+                        help="Window size for moving average when averaging orientations. Default is 20 frames. Note that this is calculated after 180-degree filtering. Passing a value of 1 is equivalent to not using a moving average.")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
@@ -48,6 +57,9 @@ def main():
 
     print(f"Predicting on dataset {dataset_dir}. Loading model weights from {weights}")
 
+    if args.filter_angles and args.augment:
+        raise ValueError("Data augmentation is not compatible with angle filtering and averaging.")
+
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_dir, augment=args.augment, imgsz=imgsz)
     dataloader = DataLoader(dataset, **dataloader_args)
 
@@ -55,7 +67,9 @@ def main():
     model.load_state_dict(torch.load(weights, map_location=device, weights_only=True))
     model.set_device(device)
 
-    om = model.evaluate(dataloader, outfile_path)
+    om = model.evaluate(dataloader, outfile_path, filter_angles=args.filter_angles,
+                        neighbor_window=args.neighbor_window, angle_window=args.angle_window,
+                        angle_threshold=args.angle_threshold, moving_avg_window=args.moving_avg_window)
 
     metrics_file = output_folder / f"{output_folder.name}_{settings['orientations_metrics_suffix']}"
     line_results_file = output_folder / f"{output_folder.name}_{settings['orientations_line_results_suffix']}"
