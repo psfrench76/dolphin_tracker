@@ -48,21 +48,21 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
 
     # Determine dataset name and output path
     dataset_name = extracted_frames_root.name
-    synthetic_dataset_path = storage_path("data/synthetic") / dataset_name
+    synthetic_dataset_path = storage_path(settings['synthetic_data_dir']) / dataset_name
     image_source_folder = extracted_frames_root / settings['images_dir']
 
     # Create subfolders for the new dataset
-    dest_images_path = synthetic_dataset_path / "images"
-    dest_labels_path = synthetic_dataset_path / "labels"
-    dest_tracks_path = synthetic_dataset_path / "tracks"
-    dest_orientations_path = synthetic_dataset_path / "orientations"
+    dest_images_path = synthetic_dataset_path / settings['images_dir']
+    dest_labels_path = synthetic_dataset_path / settings['labels_dir']
+    dest_tracks_path = synthetic_dataset_path / settings['tracks_dir']
+    dest_orientations_path = synthetic_dataset_path / settings['orientations_dir']
 
     for folder in [dest_images_path, dest_labels_path, dest_tracks_path, dest_orientations_path]:
         folder.mkdir(parents=True, exist_ok=True)
 
     for frame_number in range(frame_start, frame_end):
         # Copy images
-        print(f"Searching {image_source_folder} for image files with frame number {frame_number}")
+        # print(f"Searching {image_source_folder} for image files with frame number {frame_number}")
         image_file = list(image_source_folder.glob(f"*_{frame_number:06d}.jpg"))
         if not image_file:
             print(f"No image files found for frame {frame_number}. Skipping.")
@@ -77,7 +77,7 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
 
         if image_file.exists():
             new_image_path = dest_images_path / image_file.name
-            print(f"Copying image file {image_file} to {new_image_path}")
+            #print(f"Copying image file {image_file} to {new_image_path}")
             shutil.copy(image_file, new_image_path)
         else:
             print(f"Image file {image_file} does not exist. Skipping.")
@@ -87,20 +87,20 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
         frame_df = combined_df[combined_df["filename"] == frame_stem]
 
         # Generate label file
-        _generate_label_file(frame_df, dest_labels_path)
+        _generate_label_file(frame_stem, frame_df, dest_labels_path)
 
         # Generate track file
-        _generate_track_file(frame_df, dest_tracks_path)
+        _generate_track_file(frame_stem, frame_df, dest_tracks_path)
 
         # Generate orientation file
-        _generate_orientation_file(frame_df, dest_orientations_path)
+        _generate_orientation_file(frame_stem, frame_df, dest_orientations_path)
 
     print(f"Dataset frames generated at {synthetic_dataset_path}")
 
 
-def _generate_label_file(frame_df, dest_folder):
+def _generate_label_file(frame_stem, frame_df, dest_folder):
     # Generate the output file path
-    output_file = dest_folder / f"{frame_df['filename'].iloc[0]}.txt"
+    output_file = dest_folder / f"{frame_stem}.txt"
 
     # Create a new dataframe with the required columns
     label_data = frame_df[['x', 'y', 'w', 'h']].copy()
@@ -109,22 +109,22 @@ def _generate_label_file(frame_df, dest_folder):
     # Save the data to the file with space-delimited format and no header
     label_data.to_csv(output_file, sep=' ', header=False, index=False)
 
-    print(f"Label file generated at {output_file}")
+    #print(f"Label file generated at {output_file}")
 
 
-def _generate_track_file(frame_df, dest_folder):
+def _generate_track_file(frame_stem, frame_df, dest_folder):
     # Generate the output file path
-    output_file = dest_folder / f"{frame_df['filename'].iloc[0]}.txt"
+    output_file = dest_folder / f"{frame_stem}.txt"
 
     # Save the id column to the file without header or index
     frame_df[['id']].to_csv(output_file, header=False, index=False)
 
-    print(f"Track file generated at {output_file}")
+    #print(f"Track file generated at {output_file}")
 
 
-def _generate_orientation_file(frame_df, dest_folder):
+def _generate_orientation_file(frame_stem, frame_df, dest_folder):
     # Generate the output file path
-    output_file = dest_folder / f"{frame_df['filename'].iloc[0]}.txt"
+    output_file = dest_folder / f"{frame_stem}.txt"
 
     # Create a new dataframe with a sequential index and the required columns
     orientation_data = frame_df[['x_val', 'y_val']].copy()
@@ -133,7 +133,7 @@ def _generate_orientation_file(frame_df, dest_folder):
     # Save the data to the file with space-delimited format and no header
     orientation_data.to_csv(output_file, sep=' ', header=False, index=False)
 
-    print(f"Orientation file generated at {output_file}")
+    #print(f"Orientation file generated at {output_file}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

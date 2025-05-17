@@ -15,6 +15,7 @@ default_moving_avg_window: 20 # Number of frames to use for the moving average f
 storage_root: '..' # Intended for large data, not code. Either absolute, or relative to the project root.
 amp_check_models_dir: 'saves/pretrained' # Subdirectory of storage_root
 drone_profile_dir: 'cfg/drones' # Subdirectory of project root
+synthetic_data_dir: 'data/synthetic' # Subdirectory of storage_root
 user_settings_dir: 'usr' # Subdirectory of project root
 detector_runs_dir: 'runs' # Subdirectory of storage root
 logs_dir: 'logs' # Subdirectory of storage root
