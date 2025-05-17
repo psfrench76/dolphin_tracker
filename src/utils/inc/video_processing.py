@@ -39,7 +39,7 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     output_folder.mkdir(parents=True, exist_ok=True)
     oriented_bbox = False
 
-    if bbox_path.stat().st_size == 0:
+    if bbox_path is not None and bbox_path.stat().st_size == 0:
         ignore_bbox = True
 
     # Get bounding boxes
