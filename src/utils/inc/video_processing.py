@@ -45,9 +45,13 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     # Get bounding boxes
     if not bbox_path:
         all_bboxes = _get_bboxes_from_dataset_root(dataset_root_path)
-        output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
-        if all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
+        if all_bboxes is None:
+            ignore_bbox = True
+            orientations_outfile = None
+        elif all_bboxes.shape[1] == 11 or all_bboxes.shape[1] == 14:
             oriented_bbox = True
+
+        output_video_path = output_folder / f"{run_name}_{settings['gt_video_suffix']}"
 
         if orientations_outfile:
             all_bboxes.drop(columns=['angle'], inplace=True)
@@ -305,6 +309,10 @@ def _get_bboxes_from_dataset_root(dataset_root_path):
             all_bboxes.append(bboxes)
         else:
             raise ValueError(f"Label file {label_file} found without corresponding track file {track_file}")
+
+    if len(all_bboxes) == 0:
+        print(f"No valid labels found in dataset. Is this expected?")
+        return None
 
     bboxes_df = pd.concat(all_bboxes, ignore_index=True)
     return bboxes_df
