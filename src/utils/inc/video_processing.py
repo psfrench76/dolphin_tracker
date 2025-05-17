@@ -39,6 +39,9 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
     output_folder.mkdir(parents=True, exist_ok=True)
     oriented_bbox = False
 
+    if bbox_path.stat().st_size == 0:
+        ignore_bbox = True
+
     # Get bounding boxes
     if not bbox_path:
         all_bboxes = _get_bboxes_from_dataset_root(dataset_root_path)
@@ -110,9 +113,8 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
         frame = cv2.imread(str(image_file))
         frame = cv2.resize(frame, (new_width, new_height))
 
-        frame_bboxes = all_bboxes[all_bboxes['file_stem'] == image_file.stem]
-
         if not ignore_bbox:
+            frame_bboxes = all_bboxes[all_bboxes['file_stem'] == image_file.stem]
             # Draw bounding boxes and labels
             for label_index, (_, row) in enumerate(frame_bboxes.iterrows()):
                 if np.isnan(row['id']):

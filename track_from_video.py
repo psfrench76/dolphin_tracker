@@ -175,25 +175,28 @@ def main():
     summary_log.add(f"Used orientation model weights from {orientation_model_path}")
 
     dataset = DolphinOrientationDataset(dataset_root_dir=dataset_path, annotations=tracker_results_path, images_index_file=images_index_file)
-    dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
+    if len(dataset) > 0:
+        dataloader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=num_workers)
 
-    model = OrientationResNet()
-    model.load_state_dict(torch.load(orientation_model_path, map_location=device, weights_only=True))
-    model.set_device(device)
+        model = OrientationResNet()
+        model.load_state_dict(torch.load(orientation_model_path, map_location=device, weights_only=True))
+        model.set_device(device)
 
-    pred_df = model.predict(dataloader, orientations_outfile_path)
+        pred_df = model.predict(dataloader, orientations_outfile_path)
 
-    summary_log.add(f"Predicted orientations saved to {orientations_outfile_path}")
+        summary_log.add(f"Predicted orientations saved to {orientations_outfile_path}")
 
-    researcher_data_accumulator.load_orientations(orientations_outfile_path)
-    neighbor_window = args.neighbor_window or settings['default_filter_neighbor_count']
-    angle_window = args.angle_window or settings['default_filter_angle_window']
-    threshold = args.angle_threshold or settings['default_filter_angle_threshold']
-    moving_avg_window = args.moving_avg_window or settings['default_moving_avg_window']
+        researcher_data_accumulator.load_orientations(orientations_outfile_path)
+        neighbor_window = args.neighbor_window or settings['default_filter_neighbor_count']
+        angle_window = args.angle_window or settings['default_filter_angle_window']
+        threshold = args.angle_threshold or settings['default_filter_angle_threshold']
+        moving_avg_window = args.moving_avg_window or settings['default_moving_avg_window']
 
-    researcher_data_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window, angle_window=angle_window, threshold=threshold)
-    researcher_data_accumulator.add_moving_avg_angle_column(window_size=moving_avg_window)
-    researcher_data_accumulator.add_angular_distances_columns()
+        researcher_data_accumulator.add_filtered_angle_column(neighbor_window=neighbor_window, angle_window=angle_window, threshold=threshold)
+        researcher_data_accumulator.add_moving_avg_angle_column(window_size=moving_avg_window)
+        researcher_data_accumulator.add_angular_distances_columns()
+    else:
+        orientations_outfile_path = None
 
     researcher_data_accumulator.to_csv(output_file_path, ignore_columns=['Confidence'])
 
