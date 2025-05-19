@@ -39,6 +39,7 @@ def get_average_color_sampled(image_path, sample_fraction=0.1):
     # Compute the average color
     avg_start = time.time()
     avg_color = tuple(sampled_pixels.mean(axis=0).astype(int))
+    std_dev = tuple(sampled_pixels.std(axis=0))
     avg_end = time.time()
 
     end_time = time.time()
@@ -52,7 +53,7 @@ def get_average_color_sampled(image_path, sample_fraction=0.1):
     # print(f"  Compute average color: {avg_end - avg_start:.4f} seconds")
     # print(f"  Total time: {end_time - start_time:.4f} seconds")
 
-    return avg_color
+    return avg_color, std_dev
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Get average color of images in a dataset using sampled pixels.")
@@ -78,9 +79,11 @@ if __name__ == "__main__":
     print(f"Sampling {args.sample_fraction * 100:.2f}% of pixels from each image.")
 
     average_colors = []
+    std_devs = []
     for i, image_path in tqdm(enumerate(image_paths), total=len(image_paths), desc="Processing images"):
-        avg_color = get_average_color_sampled(image_path, args.sample_fraction)
+        avg_color, std_dev = get_average_color_sampled(image_path, args.sample_fraction)
         average_colors.append((image_path.name, avg_color))
+        std_devs.append(std_dev)
         # print(f"Image {i} of {len(image_paths)}: {image_path.name}: {avg_color}")
 
     # Average all image colors together and display the result
@@ -88,5 +91,12 @@ if __name__ == "__main__":
         sum(color[i] for _, color in average_colors) // len(average_colors)
         for i in range(3)
     )
+    total_std_dev = tuple(
+        sum(std_dev[i] for std_dev in std_devs) // len(std_devs)
+        for i in range(3)
+    )
+
+
     hex_color = "#{:02x}{:02x}{:02x}".format(*total_avg_color)
     print(f"Average color of the dataset: {total_avg_color} (Hex: {hex_color})")
+    print(f"Standard deviations: {total_std_dev} (avg: {np.mean(total_std_dev):.2f})")
