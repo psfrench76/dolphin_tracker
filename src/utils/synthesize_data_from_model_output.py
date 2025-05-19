@@ -2,7 +2,7 @@
 This script generates new frames for a synthetic dataset by copying images and generating labels, tracks, and orientations files
 for a specified frame range from an input dataset.
 
-Note: The frame range is inclusive of the first frame and EXCLUSIVE of the last frame.
+Note: The frame range is INCLUSIVE of the first frame and INCLUSIVE of the last frame.
 
 Usage: create_synthetic_dataset.py <image_source_folder> <track_from_video_folder> <frame_start> <frame_end>
 """
@@ -13,7 +13,7 @@ import shutil
 import pandas as pd
 from inc.settings import settings, storage_path
 
-def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_start, frame_end):
+def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_start, frame_end, background=False):
     # Validate input paths
     extracted_frames_root = Path(extracted_frames_root)
     if not extracted_frames_root.is_dir():
@@ -60,7 +60,7 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
     for folder in [dest_images_path, dest_labels_path, dest_tracks_path, dest_orientations_path]:
         folder.mkdir(parents=True, exist_ok=True)
 
-    for frame_number in range(frame_start, frame_end):
+    for frame_number in range(frame_start, frame_end + 1):
         # Copy images
         # print(f"Searching {image_source_folder} for image files with frame number {frame_number}")
         image_file = list(image_source_folder.glob(f"*_{frame_number:06d}.jpg"))
@@ -86,16 +86,24 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
         # Filter dataframe for the current frame_stem
         frame_df = combined_df[combined_df["filename"] == frame_stem]
 
-        # Generate label file
-        _generate_label_file(frame_stem, frame_df, dest_labels_path)
+        if not background:
+            # Generate label file
+            _generate_label_file(frame_stem, frame_df, dest_labels_path)
 
-        # Generate track file
-        _generate_track_file(frame_stem, frame_df, dest_tracks_path)
+            # Generate track file
+            _generate_track_file(frame_stem, frame_df, dest_tracks_path)
 
-        # Generate orientation file
-        _generate_orientation_file(frame_stem, frame_df, dest_orientations_path)
+            # Generate orientation file
+            _generate_orientation_file(frame_stem, frame_df, dest_orientations_path)
+        else:
+            _generate_background_file(frame_stem, dest_labels_path)
+            _generate_background_file(frame_stem, dest_tracks_path)
+            _generate_background_file(frame_stem, dest_orientations_path)
 
-    print(f"Dataset frames generated at {synthetic_dataset_path}")
+    if background:
+        print(f"Background frames generated at {synthetic_dataset_path}")
+    else:
+        print(f"Dataset frames generated at {synthetic_dataset_path}")
 
 
 def _generate_label_file(frame_stem, frame_df, dest_folder):
@@ -135,6 +143,17 @@ def _generate_orientation_file(frame_stem, frame_df, dest_folder):
 
     #print(f"Orientation file generated at {output_file}")
 
+def _generate_background_file(frame_stem, dest_folder):
+    # Generate the output file path
+    output_file = dest_folder / f"{frame_stem}.txt"
+
+    # Create an empty file to indicate no objects
+    with open(output_file, 'w') as f:
+        # Just an empty file for backgrounds
+        pass
+
+    #print(f"Background file generated at {output_file}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Create a synthetic dataset by copying images and generating labels, tracks, and orientations for a specified frame range."
@@ -142,7 +161,8 @@ if __name__ == "__main__":
     parser.add_argument("image_source_folder", type=Path, help="Path to the image source folder")
     parser.add_argument("track_from_video_folder", type=Path, help="Path to the track from video output folder")
     parser.add_argument("frame_start", type=int, help="Start frame number (inclusive)")
-    parser.add_argument("frame_end", type=int, help="End frame number (exclusive)")
+    parser.add_argument("frame_end", type=int, help="End frame number (inclusive)")
+    parser.add_argument("--background", "-b", action="store_true", help="Use these frames as backgrounds in the dataset")
 
     args = parser.parse_args()
 
@@ -150,5 +170,6 @@ if __name__ == "__main__":
         args.image_source_folder,
         args.track_from_video_folder,
         args.frame_start,
-        args.frame_end
+        args.frame_end,
+        args.background
     )
