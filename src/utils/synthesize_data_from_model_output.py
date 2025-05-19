@@ -1,6 +1,8 @@
 """
 This script generates new frames for a synthetic dataset by copying images and generating labels, tracks, and orientations files
-for a specified frame range from an input dataset.
+for a specified frame range from an input dataset based on model output.
+
+Note: Orientations are generated from the moving average column of the researcher output file when available. The fallback is the raw orientations output file.
 
 Note: The frame range is INCLUSIVE of the first frame and INCLUSIVE of the last frame.
 
@@ -29,6 +31,7 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
     # Check for required files in model_output_folder
     results_files = list(model_output_folder.glob(f"*{settings['results_file_suffix']}"))
     orientations_files = list(model_output_folder.glob(f"*{settings['orientations_results_suffix']}"))
+    researcher_output_files = list(model_output_folder.glob(f"*{settings['researcher_output_suffix']}"))
     images_index_files = list(model_output_folder.glob(f"*{settings['images_index_suffix']}"))
     if not results_files or not orientations_files or not images_index_files:
         raise ValueError(f"Model output folder {model_output_folder} must contain *{settings['results_file_suffix']}, *{settings['orientations_results_suffix']}, and *{settings['images_index_suffix']} files.")
@@ -39,12 +42,17 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
 
     # Apply Path.stem to images index filenames
     images_index_df["filename"] = images_index_df["filename"].apply(lambda x: Path(x).stem)
-
-    orientations_df = pd.read_csv(orientations_files[0])
-
-    # Combine results and images index dataframes
     results_df["filename"] = images_index_df["filename"]
-    combined_df = pd.merge(results_df, orientations_df, left_on=["filename", "id"], right_on=["filename", "object_id"])
+
+    if len(researcher_output_files) > 0:
+        print(f"Using researcher output file {researcher_output_files[0]}")
+        researcher_output_df = pd.read_csv(researcher_output_files[0])
+        researcher_output_df = researcher_output_df.rename(columns={"MovingAvgAngleXVal": "x_val", "MovingAvgAngleYVal": "y_val"})
+        results_df = pd.merge(results_df, researcher_output_df, left_on=["filename", "id"], right_on=["FrameID", "ObjectID"], how="left")
+    else:
+        print(f"Didn't find researcher output file. Using orientations file {orientations_files[0]}")
+        orientations_df = pd.read_csv(orientations_files[0])
+        results_df = pd.merge(results_df, orientations_df, left_on=["filename", "id"], right_on=["filename", "object_id"])
 
     # Determine dataset name and output path
     dataset_name = extracted_frames_root.name
@@ -84,7 +92,7 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
             continue
 
         # Filter dataframe for the current frame_stem
-        frame_df = combined_df[combined_df["filename"] == frame_stem]
+        frame_df = results_df[results_df["filename"] == frame_stem]
 
         if not background:
             # Generate label file
