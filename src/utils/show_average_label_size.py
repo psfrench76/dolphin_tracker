@@ -14,7 +14,7 @@ def get_image_size(image_path):
     except Exception as e:
         raise ValueError(f"Error extracting image size for {image_path}: {e}")
 
-def calculate_label_statistics(dataset_dir, yolo_output_file=None):
+def calculate_label_statistics(dataset_dir, yolo_output_file=None, tracker_output_file=None):
     image_dir = Path(dataset_dir) / "images"
     label_dir = Path(dataset_dir) / "labels"
 
@@ -28,6 +28,15 @@ def calculate_label_statistics(dataset_dir, yolo_output_file=None):
     if yolo_output_file:
         with open(yolo_output_file, "r") as f:
             lines = f.readlines()
+    elif tracker_output_file:
+        lines = []
+        dataset_name = Path(dataset_dir).name
+        with open(tracker_output_file, "r") as f:
+            lines_raw = f.readlines()
+            for line in lines_raw:
+                parts = line.strip().split(sep=",")
+                line_new = f"{dataset_name}_{int(parts[0]):06d}.jpg {parts[1]} {parts[2]} {parts[3]} {parts[4]} {parts[5]}"
+                lines.append(line_new)
     else:
         lines = []
         for label_file in label_dir.glob("*.txt"):
@@ -101,9 +110,10 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate statistics for YOLO labels.")
     parser.add_argument("dataset_dir", type=str, help="Path to the root dataset directory containing 'images' and 'labels' subdirectories.")
     parser.add_argument("--yolo_output_file", type=str, default=None, help="Path to the YOLO output file containing all labels.")
+    parser.add_argument("--tracker_results_file", type=str, default=None, help="Path to the tracker results file containing all labels.")
     args = parser.parse_args()
 
-    calculate_label_statistics(args.dataset_dir, args.yolo_output_file)
+    calculate_label_statistics(args.dataset_dir, args.yolo_output_file, args.tracker_results_file)
 
 if __name__ == "__main__":
     main()
