@@ -47,7 +47,7 @@ def count_dolphins_per_frame(dataset_root, print_empty=False):
 def main():
     parser = argparse.ArgumentParser(description="Count the number of dolphins per frame in a dataset.")
     parser.add_argument('dataset_root', type=Path, help='Path to the input directory containing .json or .txt files')
-    parser.add_argument('--print_empty ', action='store_true', help='Print frames with no dolphins')
+    parser.add_argument('--print_empty', action='store_true', help='Print frames with no dolphins')
     args = parser.parse_args()
 
     count_dolphins_per_frame(args.dataset_root, args.print_empty)
