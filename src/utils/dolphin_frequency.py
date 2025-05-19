@@ -9,11 +9,16 @@ This script takes an input directory of .json or .txt files (from the labelme co
 and returns the number of frames with each number of dolphins.
 """
 
-def count_dolphins_per_frame(directory):
+
+def count_dolphins_per_frame(dataset_root):
+    if not dataset_root.is_dir():
+        print(f"Error: {dataset_root} is not a valid directory.")
+        return
+
     dolphin_counts = defaultdict(int)
 
     # Iterate over all files in the directory
-    for file_path in Path(directory).rglob('*'):
+    for file_path in Path(dataset_root).rglob('*'):
         if file_path.suffix == '.json':
             # Open and load the JSON file
             with file_path.open('r') as file:
@@ -43,23 +48,16 @@ def count_dolphins_per_frame(directory):
             num_dolphins = len(unique_lines)
             dolphin_counts[num_dolphins] += 1
 
-    return dolphin_counts
+    for num_dolphins, num_frames in sorted(dolphin_counts.items(), reverse=True):
+        print(f"{num_dolphins} dolphins: {num_frames} frames")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Count the number of dolphins per frame in a dataset.")
-    parser.add_argument('input_directory', type=Path, help='Path to the input directory containing .json or .txt files')
+    parser.add_argument('dataset_root', type=Path, help='Path to the input directory containing .json or .txt files')
     args = parser.parse_args()
 
-    input_directory = args.input_directory
-    if not input_directory.is_dir():
-        print(f"Error: {input_directory} is not a valid directory.")
-        return
-
-    dolphin_counts = count_dolphins_per_frame(input_directory)
-
-    for num_dolphins, num_frames in sorted(dolphin_counts.items(), reverse=True):
-        print(f"{num_dolphins} dolphins: {num_frames} frames")
+    count_dolphins_per_frame(args.dataset_root)
 
 
 if __name__ == '__main__':
