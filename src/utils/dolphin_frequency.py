@@ -10,34 +10,26 @@ and returns the number of frames with each number of dolphins.
 """
 
 
-def count_dolphins_per_frame(dataset_root):
+def count_dolphins_per_frame(dataset_root, print_empty=False):
     if not dataset_root.is_dir():
         print(f"Error: {dataset_root} is not a valid directory.")
         return
 
+    if dataset_root.name in [settings['images_dir'], settings['tracks_dir'], settings['labels_dir'], settings['orientations_dir']]:
+        raise ValueError("Destination directory should be the dataset root, not images, labels, tracks, or orientations directory.")
+
+    labels_dir = dataset_root / settings['labels_dir']
+
     dolphin_counts = defaultdict(int)
 
     # Iterate over all files in the directory
-    for file_path in Path(dataset_root).rglob('*'):
-        if file_path.suffix == '.json':
-            # Open and load the JSON file
-            with file_path.open('r') as file:
-                data = json.load(file)
-
-            # Use a set to track unique group_ids for dolphins
-            dolphin_group_ids = set()
-
-            # Iterate over shapes and find group_ids for "Dolphin" shapes
-            for shape in data.get('shapes', []):
-                if shape.get('label') in ["Dolphin", "dolphin", "box", "rectangle"]:
-                    dolphin_group_ids.add(shape.get('group_id'))
-
-            # Count the number of dolphins in the current frame
-            num_dolphins = len(dolphin_group_ids)
-            dolphin_counts[num_dolphins] += 1
-
-        elif file_path.suffix == '.txt':
+    for file_path in Path(labels_dir).rglob('*'):
+        if file_path.suffix == '.txt':
             # Open and read the TXT file
+            if print_empty:
+                if file_path.stat().st_size == 0:
+                    print(f"Empty frame: {file_path}")
+                    continue
             with file_path.open('r') as file:
                 lines = file.readlines()
 
@@ -55,9 +47,10 @@ def count_dolphins_per_frame(dataset_root):
 def main():
     parser = argparse.ArgumentParser(description="Count the number of dolphins per frame in a dataset.")
     parser.add_argument('dataset_root', type=Path, help='Path to the input directory containing .json or .txt files')
+    parser.add_argument('--print_empty ', action='store_true', help='Print frames with no dolphins')
     args = parser.parse_args()
 
-    count_dolphins_per_frame(args.dataset_root)
+    count_dolphins_per_frame(args.dataset_root, args.print_empty)
 
 
 if __name__ == '__main__':
