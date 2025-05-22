@@ -288,22 +288,24 @@ class DolphinOrientationDataset(Dataset):
             else:
                 orientation_file_path = self.orientations_index[label_file_path.stem]
 
-            if label_file_path.stem not in self.tracks_index:
-                raise FileNotFoundError(f"Track file for {label_file_path.stem} not found.")
-            else:
-                track_file_path = self.tracks_index[label_file_path.stem]
-
             image_path = self.images_index[label_file_path.stem]
 
             orientations = {int(label_index): [float(x), float(y)] for label_index, x, y in
                             [val.split() for val in orientation_file_path.read_text().splitlines()]}
 
-            for label_index, (line, track) in enumerate(zip(label_file_path.read_text().splitlines(),
-                                                          track_file_path.read_text().splitlines())):
+            for label_index, line in enumerate(label_file_path.read_text().splitlines()):
+
                 if label_index not in orientations:
                     continue
 
-                track = int(track)
+                if label_file_path.stem not in self.tracks_index:
+                    raise FileNotFoundError(f"Track file for {label_file_path.stem} not found.")
+                else:
+                    track_file_path = self.tracks_index[label_file_path.stem]
+
+                tracks = track_file_path.read_text().splitlines()
+                track = int(tracks[label_index])
+
                 _, x_center, y_center, width, height = map(float, line.split())
                 bbox = (x_center, y_center, width, height)
 
