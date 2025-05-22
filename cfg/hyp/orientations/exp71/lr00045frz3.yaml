@@ -1,0 +1,7 @@
+lr_start: 0.00045
+lr_final_factor: 0.01
+num_epochs: 100
+batch_size: 256
+freeze: 3
+imgsz: 244
+augment: True
