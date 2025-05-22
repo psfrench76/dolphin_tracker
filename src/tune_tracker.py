@@ -293,8 +293,8 @@ class GeneticAlgorithm:
         population_history = {'generations': {}}
 
         evolutions_file_path = self.output_dir_path / settings['evolution_log_file']
-        with open(evolutions_file_path, 'r') as f:
-            if evolutions_file_path.is_file():
+        if evolutions_file_path.is_file():
+            with open(evolutions_file_path, 'r') as f:
                 data = yaml.safe_load(f)
                 if data is not None:
                     population_history.update(data)
@@ -325,6 +325,8 @@ class GeneticAlgorithm:
                     'generation': tracker.generation
                 })
         population_history['generations'][self.generation_number] = generation_details
+
+        evolutions_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(evolutions_file_path, 'w') as f:
             yaml.dump(population_history, f)

@@ -1,0 +1,9 @@
+# Copied from evolved/bal4_e71_best_genetic/gen29/289.yaml
+fuse_score: true
+iou: 0.595600320959734
+match_thresh: 0.6490350772169033
+new_track_thresh: 0.3453979929925501
+track_buffer: 32
+track_high_thresh: 0.25659577906388403
+track_low_thresh: 0.19780739914579146
+tracker_type: bytetrack
