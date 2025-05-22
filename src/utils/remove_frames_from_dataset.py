@@ -33,7 +33,7 @@ def delete_frame_files(dataset_root, frame_start, frame_end=None):
             print(f"Warning: Subdirectory '{subdir}' does not exist. Skipping.")
             continue
 
-        for file_path in subdir.iterdir():
+        for file_path in sorted(list(subdir.iterdir())):
             match = frame_regex.search(file_path.name)
             if match:
                 frame_number = int(match.group(1))

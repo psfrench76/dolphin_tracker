@@ -68,6 +68,8 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
     for folder in [dest_images_path, dest_labels_path, dest_tracks_path, dest_orientations_path]:
         folder.mkdir(parents=True, exist_ok=True)
 
+    frames_generated = 0
+
     for frame_number in range(frame_start, frame_end + 1):
         # Copy images
         # print(f"Searching {image_source_folder} for image files with frame number {frame_number}")
@@ -108,10 +110,12 @@ def generate_dataset_frames(extracted_frames_root, model_output_folder, frame_st
             _generate_background_file(frame_stem, dest_tracks_path)
             _generate_background_file(frame_stem, dest_orientations_path)
 
+        frames_generated += 1
+
     if background:
-        print(f"Background frames generated at {synthetic_dataset_path}")
+        print(f"{frames_generated} background frames generated at {synthetic_dataset_path}")
     else:
-        print(f"Dataset frames generated at {synthetic_dataset_path}")
+        print(f"{frames_generated} dataset frames generated at {synthetic_dataset_path}")
 
 
 def _generate_label_file(frame_stem, frame_df, dest_folder):
