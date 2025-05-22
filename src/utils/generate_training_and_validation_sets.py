@@ -66,20 +66,25 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     train_images_dir_path = train_dir_path / settings['images_dir']
     train_labels_dir_path = train_dir_path / settings['labels_dir']
     train_orientations_dir_path = train_dir_path / settings['orientations_dir']
+    train_tracks_dir_path = train_dir_path / settings['tracks_dir']
 
     valid_images_dir_path = valid_dir_path / settings['images_dir']
     valid_labels_dir_path = valid_dir_path / settings['labels_dir']
     valid_orientations_dir_path = valid_dir_path / settings['orientations_dir']
+    valid_tracks_dir_path = valid_dir_path / settings['tracks_dir']
 
     test_images_dir_path = test_dir_path / settings['images_dir']
     test_labels_dir_path = test_dir_path / settings['labels_dir']
     test_orientations_dir_path = test_dir_path / settings['orientations_dir']
+    test_tracks_dir_path = test_dir_path / settings['tracks_dir']
 
     train_images_dir_path.mkdir(parents=True, exist_ok=True)
     train_labels_dir_path.mkdir(parents=True, exist_ok=True)
+    train_tracks_dir_path.mkdir(parents=True, exist_ok=True)
 
     valid_images_dir_path.mkdir(parents=True, exist_ok=True)
     valid_labels_dir_path.mkdir(parents=True, exist_ok=True)
+    valid_tracks_dir_path.mkdir(parents=True, exist_ok=True)
 
     if test_orientations_dir_path.exists():
         train_orientations_dir_path.mkdir(parents=True, exist_ok=True)
@@ -105,10 +110,14 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
                 if not orientation_file.exists():
                     orientation_file = None
 
+                track_file = image_file.parent.parent / settings['tracks_dir'] / image_file.with_suffix('.txt').name
+                if not track_file.exists():
+                    track_file = None
+
                 if label_file.stat().st_size == 0:
-                    train_set_negative.append((image_file, label_file, orientation_file))
+                    train_set_negative.append((image_file, label_file, track_file, orientation_file))
                 else:
-                    train_set.append((image_file, label_file, orientation_file))
+                    train_set.append((image_file, label_file, track_file, orientation_file))
 
 
     negative_count = len(train_set_negative)
@@ -125,21 +134,30 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
             orientation_file = test_orientations_dir_path / (image_file.stem + '.txt')
             if not orientation_file.exists():
                 orientation_file = None
-            valid_set.append((image_file, label_file, orientation_file))
+
+            track_file = test_tracks_dir_path / (image_file.stem + '.txt')
+            if not track_file.exists():
+                track_file = None
+
+            valid_set.append((image_file, label_file, track_file, orientation_file))
         else:
             images_without_labels_count += 1
 
 
     # Copy files to train and valid folders
-    for image_path, label_path, orientation_path in train_set:
+    for image_path, label_path, track_path, orientation_path in train_set:
         shutil.copy(image_path, train_images_dir_path / image_path.name)
         shutil.copy(label_path, train_labels_dir_path / label_path.name)
+        if track_path:
+            shutil.copy(track_path, train_tracks_dir_path / track_path.name)
         if orientation_path:
             shutil.copy(orientation_path, train_orientations_dir_path / orientation_path.name)
 
-    for image_path, label_path, orientation_path in valid_set:
+    for image_path, label_path, track_path, orientation_path in valid_set:
         shutil.copy(image_path, valid_images_dir_path / image_path.name)
         shutil.copy(label_path, valid_labels_dir_path / label_path.name)
+        if track_path:
+            shutil.copy(track_path, valid_tracks_dir_path / track_path.name)
         if orientation_path:
             shutil.copy(orientation_path, valid_orientations_dir_path / orientation_path.name)
 
@@ -149,9 +167,13 @@ def _generate_train_and_valid_sets(complete_source_dir_path, dataset_root_path, 
     print(f"Total images in test set: {len(test_images)}\n")
 
     print(f"Images and labels copied from test to validation set: {len(valid_set)}")
+    print(f"Tracks copied from test to validation set: {len([t for _, _, t, _ in valid_set if t])}")
+    print(f"Orientations copied from test to validation set: {len([o for _, _, _, o in valid_set if o])}")
     print(f"Images in test set without labels, not copied to validation set: {images_without_labels_count}\n")
 
     print(f"Total images and labels copied to train set: {len(train_set)}")
+    print(f"Total tracks copied to train set: {len([t for _, _, t, _ in train_set if t])}")
+    print(f"Total orientations copied to train set: {len([o for _, _, _, o in train_set if o])}")
     print(f"Positive images copied to train set: {len(train_set) - negative_count}")
     print(f"Negative images copied to train set: {negative_count} out of {len(train_set_negative)} available\n")
 
