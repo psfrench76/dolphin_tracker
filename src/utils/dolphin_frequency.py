@@ -23,12 +23,13 @@ def count_dolphins_per_frame(dataset_root, print_empty=False):
     dolphin_counts = defaultdict(int)
 
     # Iterate over all files in the directory
-    for file_path in Path(labels_dir).rglob('*'):
+    for file_path in sorted(list(Path(labels_dir).rglob('*'))):
         if file_path.suffix == '.txt':
             # Open and read the TXT file
             if print_empty:
                 if file_path.stat().st_size == 0:
                     print(f"Empty frame: {file_path}")
+                    dolphin_counts[0] += 1
                     continue
             with file_path.open('r') as file:
                 lines = file.readlines()
