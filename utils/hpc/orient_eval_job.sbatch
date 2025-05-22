@@ -29,6 +29,6 @@ conda env list
 python -V
 which python
 
-/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python src/eval_orientations.py --dataset $DATASET --output_folder $OUTPUT_FOLDER --weights $WEIGHTS $AUGMENT > "/nfs/hpc/share/frenchp/dolphin-tracker/logs/results/orient_eval_$SLURM_JOBID.log"
+/nfs/stak/users/frenchp/hpc-share/.conda/envs/dolphin-v2/bin/python src/eval_orientations.py --dataset $DATASET --output_folder $OUTPUT_FOLDER --weights $WEIGHTS $AUGMENT $FILTER_ANGLES > "/nfs/hpc/share/frenchp/dolphin-tracker/logs/results/orient_eval_$SLURM_JOBID.log"
 conda deactivate
 date
