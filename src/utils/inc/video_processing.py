@@ -193,6 +193,9 @@ def generate_video_with_labels(dataset_root_path, output_folder, resize=1.0, bbo
 
         # Write the frame to the video
         video_writer.write(frame)
+        if sf == ef:
+            cv2.imwrite(output_video_path.with_suffix('.jpg'), frame)
+            print(f"Single frame saved to {output_video_path.with_suffix('.jpg')}")
 
     # Release the video writer
     video_writer.release()
